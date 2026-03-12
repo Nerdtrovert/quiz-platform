@@ -97,7 +97,7 @@ module.exports = function initSocket(io) {
     });
 
     // ── STUDENT: Rejoin after page navigation ─────────────
-    socket.on("rejoin-room", async ({ room_code, participant_id, name }) => {
+    socket.on("rejoin-room", ({ room_code, participant_id, name }) => {
       const room = rooms[room_code];
       if (!room) return;
 
@@ -106,29 +106,18 @@ module.exports = function initSocket(io) {
         (p) => p.participant_id === participant_id,
       );
 
-      let resolvedName = (name || "").trim();
-      try {
-        const [rows] = await pool.query(
-          `SELECT name FROM Participants WHERE participant_id = ? LIMIT 1`,
-          [participant_id],
-        );
-        const dbName = rows?.[0]?.name;
-
-        if (dbName && dbName.trim()) {
-          resolvedName = dbName.trim();
-        } else if (resolvedName) {
-          await pool
-            .query(`UPDATE Participants SET name = ? WHERE participant_id = ?`, [
-              resolvedName,
-              participant_id,
-            ])
-            .catch((err) => console.error("rejoin-room name update error:", err));
+      let resolvedName = name;
+      if (!resolvedName) {
+        try {
+          const [rows] = await pool.query(
+            `SELECT name FROM Participants WHERE participant_id = ? LIMIT 1`,
+            [participant_id],
+          );
+          resolvedName = rows?.[0]?.name;
+        } catch (err) {
+          console.error("rejoin-room name lookup error:", err);
         }
-      } catch (err) {
-        console.error("rejoin-room name lookup error:", err);
       }
-
-      if (!resolvedName) resolvedName = "Player";
 
       if (existing) {
         if (resolvedName) existing.name = resolvedName;
@@ -144,7 +133,7 @@ module.exports = function initSocket(io) {
         // New entry if not found
         room.participants[socket.id] = {
           participant_id,
-          name: resolvedName || "Player",
+          name: name || "Player",
           score: 0,
           streak: 0,
           multiplier: 1,
