@@ -47,6 +47,7 @@ module.exports = function initSocket(io) {
     // ── STUDENT: Join room ────────────────────────────────
     socket.on("join-room", async ({ room_code, name }) => {
       const room = rooms[room_code];
+      const safeName = (name || "Player").trim() || "Player";
       if (!room) return socket.emit("error", { message: "Room not found" });
       if (room.status !== "waiting")
         return socket.emit("error", { message: "Quiz already started" });
@@ -54,13 +55,13 @@ module.exports = function initSocket(io) {
       try {
         const [result] = await pool.query(
           `INSERT INTO Participants (room_id, name) VALUES (?, ?)`,
-          [room.room_id, name],
+          [room.room_id, safeName],
         );
         const participant_id = result.insertId;
 
         room.participants[socket.id] = {
           participant_id,
-          name,
+          name: safeName,
           score: 0,
           streak: 0,
           multiplier: 1,
@@ -69,17 +70,18 @@ module.exports = function initSocket(io) {
         socket.join(room_code);
         socket.room_code = room_code;
         socket.participant_id = participant_id;
-        socket.player_name = name;
+        socket.player_name = safeName;
 
         socket.emit("joined-room", {
           participant_id,
           room_code,
           quiz_id: room.quiz_id,
+          name: safeName,
         });
 
         io.to(room_code).emit("participant-joined", {
           participant_id,
-          name,
+          name: safeName,
           count: Object.keys(room.participants).length,
           participants: Object.values(room.participants).map((p) => ({
             participant_id: p.participant_id,
@@ -87,7 +89,7 @@ module.exports = function initSocket(io) {
           })),
         });
 
-        console.log(`${name} joined room ${room_code}`);
+        console.log(`${safeName} joined room ${room_code}`);
       } catch (err) {
         console.error("join-room error:", err);
         socket.emit("error", { message: "Failed to join room" });

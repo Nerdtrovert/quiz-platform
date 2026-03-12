@@ -24,12 +24,12 @@ export default function WaitingRoom() {
       socket.emit("join-room", { room_code: roomCode, name: playerName });
     });
 
-    socket.on("joined-room", ({ participant_id, quiz_id }) => {
+    socket.on("joined-room", ({ participant_id, quiz_id, name }) => {
       setStatus("waiting");
       // Store for use in quiz room
       sessionStorage.setItem("participant_id", participant_id);
       sessionStorage.setItem("quiz_id", quiz_id);
-      sessionStorage.setItem("player_name", playerName);
+      sessionStorage.setItem("player_name", name || playerName);
       sessionStorage.setItem("room_code", roomCode);
     });
 
