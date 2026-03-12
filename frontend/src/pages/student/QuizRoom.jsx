@@ -38,7 +38,6 @@ export default function QuizRoom() {
         socket.emit("rejoin-room", {
           room_code: roomCode,
           participant_id: Number(participantId),
-          name: playerName,
         });
         setStatus("waiting");
       } else {
@@ -111,33 +110,14 @@ export default function QuizRoom() {
   }, [roomCode, playerName]);
 
   useEffect(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
     if (status !== "active" || !currentQuestion || paused || timeLeft <= 0) return;
 
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [status, currentQuestion, paused]);
+    return () => clearInterval(timer);
+  }, [status, currentQuestion, paused, timeLeft]);
 
   const submitAnswer = () => {
     if (!currentQuestion || selectedOption == null || submitted) return;
