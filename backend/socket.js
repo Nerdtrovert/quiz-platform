@@ -95,7 +95,7 @@ module.exports = function initSocket(io) {
     });
 
     // ── STUDENT: Rejoin after page navigation ─────────────
-    socket.on("rejoin-room", ({ room_code, participant_id, name }) => {
+    socket.on("rejoin-room",async ({ room_code, participant_id, name }) => {
       const room = rooms[room_code];
       if (!room) return;
 
