@@ -38,7 +38,6 @@ export default function QuizRoom() {
         socket.emit("rejoin-room", {
           room_code: roomCode,
           participant_id: Number(participantId),
-          name: playerName,
         });
         setStatus("waiting");
       } else {
@@ -111,33 +110,14 @@ export default function QuizRoom() {
   }, [roomCode, playerName]);
 
   useEffect(() => {
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-
     if (status !== "active" || !currentQuestion || paused || timeLeft <= 0) return;
 
-    timerRef.current = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
+    const timer = setInterval(() => {
+      setTimeLeft((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [status, currentQuestion, paused]);
+    return () => clearInterval(timer);
+  }, [status, currentQuestion, paused, timeLeft]);
 
   const submitAnswer = () => {
     if (!currentQuestion || selectedOption == null || submitted) return;
@@ -154,14 +134,6 @@ export default function QuizRoom() {
 
     setSubmitted(true);
   };
-
-  const participantId = Number(sessionStorage.getItem("participant_id") || 0);
-  const topFiveLeaderboard = finalLeaderboard.slice(0, 5);
-  const myEntry =
-    finalLeaderboard.find((entry) => Number(entry.participant_id) === participantId) ||
-    finalLeaderboard.find((entry) => entry.name === playerName) ||
-    null;
-  const isQuestionVisible = status === "active" && currentQuestion;
 
   if (status === "kicked") {
     return (
@@ -213,29 +185,16 @@ export default function QuizRoom() {
           <div style={s.card}>
             <h2 style={s.cardTitle}>Quiz Complete 🎉</h2>
             <p style={s.cardSub}>Final score: {score}</p>
-
-            {topFiveLeaderboard.length > 0 && (
-              <>
-                <h3 style={s.sectionTitle}>Top 5 Leaderboard</h3>
-                <div style={s.participantsList}>
-                  {topFiveLeaderboard.map((entry) => (
-                    <div key={`${entry.rank}-${entry.name}`} style={s.participantChip}>
-                      <span style={s.chipName}>#{entry.rank} {entry.name}</span>
-                      <span style={s.chipAvatar}>{entry.score}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {myEntry && (
-              <div style={s.myRankCard}>
-                <div style={s.myRankLabel}>Your Rank</div>
-                <div style={s.myRankValue}>#{myEntry.rank}</div>
-                <div style={s.myRankSub}>{myEntry.name} · {myEntry.score} pts</div>
+            {finalLeaderboard.length > 0 && (
+              <div style={s.participantsList}>
+                {finalLeaderboard.map((entry) => (
+                  <div key={`${entry.rank}-${entry.name}`} style={s.participantChip}>
+                    <span style={s.chipName}>#{entry.rank} {entry.name}</span>
+                    <span style={s.chipAvatar}>{entry.score}</span>
+                  </div>
+                ))}
               </div>
             )}
-
             <button style={s.homeBtn} onClick={() => navigate("/")}>
               Back to Home
             </button>
@@ -244,6 +203,8 @@ export default function QuizRoom() {
       </div>
     );
   }
+
+  const isQuestionVisible = status === "active" && currentQuestion;
 
   return (
     <div style={s.page}>
@@ -532,17 +493,6 @@ const s = {
     background: "#0e1f16",
   },
   startHint: { fontSize: "0.72rem", color: "#555" },
-  sectionTitle: { fontSize: "0.88rem", color: "#f0d7a1", margin: "0.25rem 0" },
-  myRankCard: {
-    width: "100%",
-    border: "1px solid #3a2a10",
-    background: "#16110a",
-    borderRadius: "10px",
-    padding: "0.85rem",
-  },
-  myRankLabel: { fontSize: "0.72rem", color: "#9f9f9f", textTransform: "uppercase", letterSpacing: "0.08em" },
-  myRankValue: { fontSize: "1.3rem", color: "#f5a623", fontWeight: "800", marginTop: "0.2rem" },
-  myRankSub: { fontSize: "0.82rem", color: "#d7cfbf" },
   errorIcon: { fontSize: "2rem", marginBottom: "0.4rem" },
   cardTitle: {
     fontSize: "1.2rem",
