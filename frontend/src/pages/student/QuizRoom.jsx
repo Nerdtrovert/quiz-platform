@@ -5,7 +5,7 @@ import { io } from "socket.io-client";
 const SOCKET_URL =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
-export default function WaitingRoom() {
+export default function QuizRoom() {
   const { roomCode } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -21,7 +21,17 @@ export default function WaitingRoom() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      socket.emit("join-room", { room_code: roomCode, name: playerName });
+      const participantId = sessionStorage.getItem("participant_id");
+
+      if (participantId) {
+        socket.emit("rejoin-room", {
+          room_code: roomCode,
+          participant_id: Number(participantId),
+        });
+        setStatus("waiting");
+      } else {
+        socket.emit("join-room", { room_code: roomCode, name: playerName });
+      }
     });
 
     socket.on("joined-room", ({ participant_id, quiz_id }) => {
