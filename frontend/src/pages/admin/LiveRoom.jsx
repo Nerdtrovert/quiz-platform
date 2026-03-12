@@ -181,7 +181,7 @@ export default function LiveRoom() {
             {[
               { icon: "⚡", label: "Dashboard", path: "/admin" },
               { icon: "🗃", label: "Question Bank", path: "/admin/questions" },
-              { icon: "📝", label: "My Quizzes", path: "/admin/exams" },
+              { icon: "📝", label: "My Quizzes", path: "/admin/create-quiz" },
               {
                 icon: "🚀",
                 label: "Live Room",

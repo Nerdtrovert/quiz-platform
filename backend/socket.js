@@ -104,7 +104,22 @@ module.exports = function initSocket(io) {
         (p) => p.participant_id === participant_id,
       );
 
+      let resolvedName = name;
+      if (!resolvedName) {
+        try {
+          const [rows] = await pool.query(
+            `SELECT name FROM Participants WHERE participant_id = ? LIMIT 1`,
+            [participant_id],
+          );
+          resolvedName = rows?.[0]?.name;
+        } catch (err) {
+          console.error("rejoin-room name lookup error:", err);
+        }
+      }
+
       if (existing) {
+        if (resolvedName) existing.name = resolvedName;
+
         // Remove old socket entry
         const oldSocketId = Object.keys(room.participants).find(
           (sid) => room.participants[sid].participant_id === participant_id,
@@ -126,6 +141,14 @@ module.exports = function initSocket(io) {
       socket.join(room_code);
       socket.room_code = room_code;
       socket.participant_id = participant_id;
+
+      io.to(room_code).emit("participant-joined", {
+        count: Object.keys(room.participants).length,
+        participants: Object.values(room.participants).map((p) => ({
+          participant_id: p.participant_id,
+          name: p.name,
+        })),
+      });
 
       // If quiz already in progress, send current question
       if (room.status === "active" && room.questions.length > 0) {
@@ -458,6 +481,7 @@ module.exports = function initSocket(io) {
 
     io.to(room_code).emit("quiz-end", {
       leaderboard: sorted.map((p, i) => ({
+        participant_id: p.participant_id,
         name: p.name,
         score: p.score,
         rank: i + 1,
