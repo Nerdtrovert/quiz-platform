@@ -16,7 +16,7 @@ import Result           from './pages/student/Result';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import QuestionBank   from './pages/admin/QuestionBank';
 import CreateQuiz     from './pages/admin/CreateQuiz';
-import LiveRoom       from './pages/admin/LiveRoom';
+import LiveRoom from "./pages/admin/LiveRoom";
 
 export default function App() {
   return (
@@ -40,7 +40,7 @@ export default function App() {
           <Route path="/admin" element={<AdminDashboard />} />
           <Route path="/admin/questions" element={<QuestionBank />} />
           <Route path="/admin/create-quiz" element={<CreateQuiz />} />
-          <Route path="/admin/live/:roomCode" element={<LiveRoom />} />
+          <Route path="/admin/live" element={<LiveRoom />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

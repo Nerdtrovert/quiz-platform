@@ -1,14 +1,14 @@
 const pool = require("../config/db");
 
-// ─── GET ALL QUIZZES FOR ADMIN ────────────────────────────
+// ─── GET ALL QUIZZES FOR ADMIN (for Live Room selector) ───
 exports.getQuizzes = async (req, res) => {
   const admin_id = req.user.admin_id;
   try {
     const [quizzes] = await pool.query(
-      `SELECT q.*, 
+      `SELECT q.*,
         (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
        FROM Quizzes q
-       WHERE q.admin_id = ?
+       WHERE q.admin_id = ? AND q.is_static = 0
        ORDER BY q.created_at DESC`,
       [admin_id],
     );
@@ -23,7 +23,6 @@ exports.getQuizzes = async (req, res) => {
 exports.getQuizById = async (req, res) => {
   const { id } = req.params;
   try {
-    // Get quiz info
     const [quizRows] = await pool.query(
       "SELECT * FROM Quizzes WHERE quiz_id = ?",
       [id],
@@ -31,7 +30,6 @@ exports.getQuizById = async (req, res) => {
     if (quizRows.length === 0)
       return res.status(404).json({ message: "Quiz not found" });
 
-    // Get questions with options
     const [questions] = await pool.query(
       `SELECT qb.*, qq.order_index,
         JSON_ARRAYAGG(
@@ -73,22 +71,20 @@ exports.createQuiz = async (req, res) => {
   try {
     await conn.beginTransaction();
 
-    // Insert quiz
     const [result] = await conn.query(
       `INSERT INTO Quizzes (admin_id, title, genre, difficulty, num_questions, time_per_question, is_static)
        VALUES (?, ?, ?, ?, ?, ?, 0)`,
       [
         admin_id,
         title,
-        genre || "Mixed",
-        difficulty || "medium",
+        genre || "mixed",
+        (difficulty || "mixed").toLowerCase(),
         question_ids.length,
         time_per_question || 30,
       ],
     );
     const quiz_id = result.insertId;
 
-    // Insert quiz-question mappings
     for (let i = 0; i < question_ids.length; i++) {
       await conn.query(
         "INSERT INTO QuizQuestions (quiz_id, question_id, order_index) VALUES (?, ?, ?)",
@@ -121,6 +117,7 @@ exports.deleteQuiz = async (req, res) => {
     if (rows[0].admin_id !== admin_id)
       return res.status(403).json({ message: "Not your quiz" });
 
+    await pool.query("DELETE FROM QuizQuestions WHERE quiz_id = ?", [id]);
     await pool.query("DELETE FROM Quizzes WHERE quiz_id = ?", [id]);
     res.json({ message: "Quiz deleted" });
   } catch (err) {
@@ -137,7 +134,7 @@ exports.getStaticQuizzes = async (req, res) => {
         (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
        FROM Quizzes q
        WHERE q.is_static = 1
-       ORDER BY q.created_at DESC`,
+       ORDER BY q.created_at ASC`,
     );
     res.json({ quizzes });
   } catch (err) {

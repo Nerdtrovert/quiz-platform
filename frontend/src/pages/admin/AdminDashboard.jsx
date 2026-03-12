@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../../utils/api";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
@@ -12,9 +13,15 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
-    // TODO: fetch real stats from API
-    // For now using placeholder data
-    setStats({ quizzes: 3, questions: 24, rooms: 5, participants: 87 });
+    const fetchStats = async () => {
+      try {
+        const res = await api.get("/admin/stats");
+        setStats(res.data);
+      } catch {
+        setStats({ quizzes: 0, questions: 0, rooms: 0, participants: 0 });
+      }
+    };
+    fetchStats();
   }, []);
 
   const handleLogout = () => {
@@ -39,8 +46,8 @@ export default function AdminDashboard() {
             {[
               { icon: "⚡", label: "Dashboard", path: "/admin", active: true },
               { icon: "🗃", label: "Question Bank", path: "/admin/questions" },
-              { icon: "📝", label: "My Quizzes", path: "/admin/exams" },
-              { icon: "🚀", label: "Start Room", path: "/admin/create-quiz" },
+              { icon: "📝", label: "Create Quiz", path: "/admin/create-quiz" },
+              { icon: "🚀", label: "Start Room", path: "/admin/live" },
             ].map((item) => (
               <button
                 key={item.path}
@@ -74,7 +81,6 @@ export default function AdminDashboard() {
 
       {/* Main content */}
       <main style={s.main}>
-        {/* Header */}
         <div style={s.header}>
           <div>
             <h1 style={s.greeting}>
@@ -90,7 +96,7 @@ export default function AdminDashboard() {
           </button>
         </div>
 
-        {/* Stats cards */}
+        {/* Stats */}
         <div style={s.statsGrid}>
           {[
             {
@@ -134,7 +140,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Quick actions */}
+        {/* Quick Actions */}
         <div style={s.sectionTitle}>Quick Actions</div>
         <div style={s.actionsGrid}>
           {[
@@ -155,13 +161,13 @@ export default function AdminDashboard() {
               icon: "🚀",
               title: "Start Live Room",
               desc: "Launch a room with a 6-char code and host a live session",
-              action: () => navigate("/admin/create-quiz"),
+              action: () => navigate("/admin/live"),
             },
             {
               icon: "📊",
               title: "View Stats",
               desc: "See how participants performed across all your quizzes",
-              action: () => navigate("/admin/exams"),
+              action: () => navigate("/admin/questions"),
             },
           ].map((item, i) => (
             <div
@@ -180,7 +186,7 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Recent activity placeholder */}
+        {/* Recent Rooms */}
         <div style={s.sectionTitle}>Recent Rooms</div>
         <div style={s.emptyState}>
           <div style={s.emptyIcon}>🚀</div>
@@ -188,10 +194,7 @@ export default function AdminDashboard() {
           <p style={s.emptySubText}>
             Start your first live quiz room to see activity here
           </p>
-          <button
-            style={s.emptyBtn}
-            onClick={() => navigate("/admin/create-exam")}
-          >
+          <button style={s.emptyBtn} onClick={() => navigate("/admin/live")}>
             Start a Room
           </button>
         </div>
@@ -224,13 +227,10 @@ const s = {
   grid: {
     position: "fixed",
     inset: 0,
-    backgroundImage: `linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px)`,
     backgroundSize: "48px 48px",
     pointerEvents: "none",
   },
-
-  // Sidebar
   sidebar: {
     width: "220px",
     flexShrink: 0,
@@ -313,8 +313,6 @@ const s = {
     width: "100%",
     transition: "all 0.2s",
   },
-
-  // Main
   main: {
     flex: 1,
     padding: "2rem 2.5rem",
@@ -347,8 +345,6 @@ const s = {
     flexShrink: 0,
     boxShadow: "0 4px 16px rgba(245,166,35,0.2)",
   },
-
-  // Stats
   statsGrid: {
     display: "grid",
     gridTemplateColumns: "repeat(4, 1fr)",
@@ -380,8 +376,6 @@ const s = {
     letterSpacing: "-0.02em",
   },
   statLabel: { fontSize: "0.72rem", color: "#888", fontWeight: "600" },
-
-  // Actions
   sectionTitle: {
     fontSize: "0.72rem",
     fontWeight: "700",
@@ -413,24 +407,14 @@ const s = {
     background: "rgba(245,166,35,0.04)",
   },
   actionIcon: { fontSize: "1.3rem" },
-  actionTitle: {
-    fontSize: "0.88rem",
-    fontWeight: "700",
-    color: "#f0e8d8",
-  },
-  actionDesc: {
-    fontSize: "0.72rem",
-    color: "#888",
-    lineHeight: "1.5",
-  },
+  actionTitle: { fontSize: "0.88rem", fontWeight: "700", color: "#f0e8d8" },
+  actionDesc: { fontSize: "0.72rem", color: "#888", lineHeight: "1.5" },
   actionArrow: {
     fontSize: "0.8rem",
     color: "#f5a623",
     fontWeight: "700",
     marginTop: "auto",
   },
-
-  // Empty state
   emptyState: {
     background: "#0f0f0f",
     border: "1px solid #1e1e1e",

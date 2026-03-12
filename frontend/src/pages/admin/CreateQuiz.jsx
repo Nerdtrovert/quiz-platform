@@ -202,15 +202,16 @@ export default function CreateQuiz() {
                 <label style={s.label}>
                   TIME PER QUESTION — {timePerQuestion}s
                 </label>
-                <input
-                  type="range"
-                  min={10}
-                  max={60}
-                  step={5}
+                <select
                   value={timePerQuestion}
-                  onChange={(e) => setTimePerQuestion(Number(e.target.value))}
-                  style={s.slider}
-                />
+                  onChange={(e) => setTimePerQuestion(parseInt(e.target.value))}
+                  style={s.select}
+                >
+                  <option value={10}>10s</option>
+                  <option value={20}>20s</option>
+                  <option value={30}>30s</option>
+                  <option value={60}>60s</option>
+                </select>
                 <div style={s.sliderLabels}>
                   <span>10s</span>
                   <span>60s</span>
