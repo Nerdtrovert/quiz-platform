@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 
@@ -9,8 +9,11 @@ export default function QuizRoom() {
   const { roomCode } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const playerName = searchParams.get("name") || "Player";
+  const playerNameFromUrl = searchParams.get("name");
+  const storedPlayerName = sessionStorage.getItem("player_name");
+  const playerName = useMemo(() => playerNameFromUrl || storedPlayerName || "Player", [playerNameFromUrl, storedPlayerName]);
   const socketRef = useRef(null);
+  const timerRef = useRef(null);
 
   const [status, setStatus] = useState("connecting"); // connecting | waiting | active | ended | error | kicked
   const [participantCount, setParticipantCount] = useState(0);
@@ -100,7 +103,10 @@ export default function QuizRoom() {
       setStatus("error");
     });
 
-    return () => socket.disconnect();
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+      socket.disconnect();
+    };
   }, [roomCode, playerName]);
 
   useEffect(() => {
