@@ -12,7 +12,7 @@ export default function WaitingRoom() {
   const playerName = searchParams.get("name") || "Player";
   const socketRef = useRef(null);
 
-  const [status, setStatus] = useState("connecting"); // connecting | waiting | error | kicked
+  const [status, setStatus] = useState("connecting"); // connecting | waiting | error | kicked | ended
   const [participantCount, setParticipantCount] = useState(0);
   const [participants, setParticipants] = useState([]);
 
@@ -24,8 +24,7 @@ export default function WaitingRoom() {
       socket.emit("join-room", { room_code: roomCode, name: playerName });
     });
 
-    socket.on("joined-room", ({ participant_id, quiz_id, name }) => {
-      
+    socket.on("joined-room", ({ participant_id, quiz_id }) => {
       // Store for use in quiz room
       sessionStorage.setItem("participant_id", participant_id);
       sessionStorage.setItem("quiz_id", quiz_id);
@@ -43,12 +42,17 @@ export default function WaitingRoom() {
       navigate(`/quiz/live/${roomCode}`);
     });
 
+    socket.on("quiz-end", () => {
+      setStatus("ended");
+      socket.disconnect();
+    });
+
     socket.on("kicked", () => {
       setStatus("kicked");
       socket.disconnect();
     });
 
-    socket.on("error", ({ message }) => {
+    socket.on("error", () => {
       setStatus("error");
     });
 
@@ -93,6 +97,24 @@ export default function WaitingRoom() {
             </p>
             <button style={s.homeBtn} onClick={() => navigate("/")}>
               Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
+  if (status === "ended")
+    return (
+      <div style={s.page}>
+        <div style={s.blob} />
+        <div style={s.grid} />
+        <div style={s.centered}>
+          <div style={s.card}>
+            <div style={s.errorIcon}>🏁</div>
+            <h2 style={s.cardTitle}>Room closed</h2>
+            <p style={s.cardSub}>The host ended this live room.</p>
+            <button style={s.homeBtn} onClick={() => navigate("/")}>
+              Back to Home
             </button>
           </div>
         </div>

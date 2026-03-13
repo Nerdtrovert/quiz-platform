@@ -20,7 +20,6 @@ export default function LiveRoom() {
   const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [roomCode] = useState(generateRoomCode);
-  const [roomCreated, setRoomCreated] = useState(false);
 
   // Room state
   const [participants, setParticipants] = useState([]);
@@ -81,11 +80,10 @@ export default function LiveRoom() {
     });
 
     socket.on("room-created", () => {
-      setRoomCreated(true);
       setStatus("waiting");
     });
 
-    socket.on("participant-joined", ({ participants, count }) => {
+    socket.on("participant-joined", ({ participants }) => {
       setParticipants(participants || []);
     });
 

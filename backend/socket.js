@@ -68,6 +68,9 @@ module.exports = function initSocket(io) {
       })),
     });
 
+    room.questions = [];
+    room.answers = {};
+
     return true;
   }
 
@@ -443,8 +446,7 @@ module.exports = function initSocket(io) {
 
       if (
         room.status === "ended" &&
-        Object.keys(room.participants).length === 0 &&
-        !room.questions.length
+        Object.keys(room.participants).length === 0
       ) {
         removeRoom(room_code);
       }
