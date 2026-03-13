@@ -35,7 +35,7 @@ export default function AdminLogin() {
 
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("admin", JSON.stringify(res.data.admin));
-      navigate("/admin");
+      navigate(res.data.admin?.is_master ? "/admin/master" : "/admin");
     } catch (err) {
       setError(err.response?.data?.message || "Cannot connect to server");
     } finally {
@@ -168,6 +168,7 @@ export default function AdminLogin() {
               Admin access only. Students join via room code on the{" "}
               <a href="/" style={s.homeLink}>home page</a>.
             </p>
+            <p style={s.secretNote}>Internal ops access uses the same sign-in form.</p>
           </div>
 
         </div>
@@ -318,6 +319,12 @@ const s = {
     fontSize: "0.72rem", color: "#555",
     textAlign: "center", lineHeight: "1.6",
     marginTop: "auto",
+  },
+  secretNote: {
+    fontSize: "0.64rem",
+    color: "#3f3f3f",
+    textAlign: "center",
+    letterSpacing: "0.03em",
   },
   homeLink: { color: "#f5a623", textDecoration: "none" },
 };

@@ -4,6 +4,7 @@ const pool = require("../config/db");
 exports.getQuestions = async (req, res) => {
   const { genre, difficulty } = req.query;
   const admin_id = req.user.admin_id;
+  const isMaster = Boolean(req.user.is_master);
 
   try {
     let query = `
@@ -18,9 +19,9 @@ exports.getQuestions = async (req, res) => {
         ) AS options
       FROM QuestionBank q
       LEFT JOIN Options o ON q.question_id = o.question_id
-      WHERE (q.admin_id = ? OR q.admin_id = 1)
+      WHERE (? = 1 OR q.admin_id = ? OR q.admin_id = 1)
     `;
-    const params = [admin_id];
+    const params = [isMaster ? 1 : 0, admin_id];
 
     if (genre) {
       query += " AND q.genre = ?";
@@ -46,6 +47,12 @@ exports.getQuestions = async (req, res) => {
 exports.addQuestion = async (req, res) => {
   const { question_text, genre, difficulty, base_points, options } = req.body;
   const admin_id = req.user.admin_id;
+
+  if (req.user.is_master) {
+    return res.status(403).json({
+      message: "Master admin cannot add questions from the standard admin flow",
+    });
+  }
 
   if (
     !question_text ||
@@ -103,6 +110,7 @@ exports.addQuestion = async (req, res) => {
 exports.deleteQuestion = async (req, res) => {
   const { id } = req.params;
   const admin_id = req.user.admin_id;
+  const isMaster = Boolean(req.user.is_master);
 
   try {
     const [rows] = await pool.query(
@@ -112,11 +120,11 @@ exports.deleteQuestion = async (req, res) => {
     if (rows.length === 0)
       return res.status(404).json({ message: "Question not found" });
     // Only allow deleting own questions (not system seed questions)
-    if (rows[0].admin_id === 1)
+    if (rows[0].admin_id === 1 && !isMaster)
       return res
         .status(403)
         .json({ message: "Cannot delete system questions" });
-    if (rows[0].admin_id !== admin_id)
+    if (!isMaster && rows[0].admin_id !== admin_id)
       return res.status(403).json({ message: "Not your question" });
 
     await pool.query("DELETE FROM QuestionBank WHERE question_id = ?", [id]);

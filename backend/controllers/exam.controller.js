@@ -3,14 +3,15 @@ const pool = require("../config/db");
 // ─── GET ALL QUIZZES FOR ADMIN (own + static presets) ────
 exports.getQuizzes = async (req, res) => {
   const admin_id = req.user.admin_id;
+  const isMaster = Boolean(req.user.is_master);
   try {
     const [quizzes] = await pool.query(
       `SELECT q.*,
         (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
        FROM Quizzes q
-       WHERE q.admin_id = ? AND q.is_static = 0
+       WHERE (? = 1 OR q.admin_id = ?) AND q.is_static = 0
        ORDER BY q.created_at DESC`,
-      [admin_id],
+      [isMaster ? 1 : 0, admin_id],
     );
 
     // Also fetch static preset quizzes (admin_id=1, is_static=1)
@@ -72,6 +73,12 @@ exports.createQuiz = async (req, res) => {
     req.body;
   const admin_id = req.user.admin_id;
 
+  if (req.user.is_master) {
+    return res
+      .status(403)
+      .json({ message: "Master admin cannot create quizzes from this screen" });
+  }
+
   if (!title || !question_ids || question_ids.length === 0)
     return res
       .status(400)
@@ -117,6 +124,7 @@ exports.createQuiz = async (req, res) => {
 exports.deleteQuiz = async (req, res) => {
   const { id } = req.params;
   const admin_id = req.user.admin_id;
+  const isMaster = Boolean(req.user.is_master);
   try {
     const [rows] = await pool.query(
       "SELECT admin_id FROM Quizzes WHERE quiz_id = ?",
@@ -124,7 +132,7 @@ exports.deleteQuiz = async (req, res) => {
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Quiz not found" });
-    if (rows[0].admin_id !== admin_id)
+    if (!isMaster && rows[0].admin_id !== admin_id)
       return res.status(403).json({ message: "Not your quiz" });
 
     await pool.query("DELETE FROM QuizQuestions WHERE quiz_id = ?", [id]);

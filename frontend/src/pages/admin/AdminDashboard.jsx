@@ -14,6 +14,11 @@ export default function AdminDashboard() {
   const [recentRooms, setRecentRooms] = useState([]);
 
   useEffect(() => {
+    if (admin.is_master) {
+      navigate("/admin/master");
+      return;
+    }
+
     const fetchStats = async () => {
       try {
         const res = await api.get("/admin/stats");
@@ -32,7 +37,7 @@ export default function AdminDashboard() {
     };
     fetchStats();
     fetchRecentRooms();
-  }, []);
+  }, [admin.is_master, navigate]);
 
   const handleLogout = () => {
     localStorage.removeItem("token");

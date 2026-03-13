@@ -1,24 +1,146 @@
+const jwt = require("jsonwebtoken");
 const pool = require("./config/db");
+const {
+  createRoom,
+  getRoom,
+  removeRoom,
+  findParticipant,
+} = require("./liveRoomStore");
+const { registerHandlers } = require("./liveRoomControl");
 
 module.exports = function initSocket(io) {
-  const rooms = {};
+  async function endQuiz(room_code, forced = false) {
+    const room = getRoom(room_code);
+    if (!room) return false;
+
+    if (room.questionTimer) clearTimeout(room.questionTimer);
+    room.status = "ended";
+    room.paused = false;
+
+    await pool
+      .query(
+        `UPDATE Rooms SET status = 'ended', ended_at = NOW() WHERE room_id = ?`,
+        [room.room_id],
+      )
+      .catch((err) => console.error("Room update error:", err));
+
+    const sorted = Object.values(room.participants).sort(
+      (a, b) => b.score - a.score,
+    );
+
+    for (let i = 0; i < sorted.length; i++) {
+      const participant = sorted[i];
+      await pool
+        .query(
+          `INSERT INTO Scores (participant_id, room_id, total_points, correct_count, wrong_count, highest_streak, final_rank)
+           SELECT ?, ?,
+             COALESCE(SUM(points_earned), 0),
+             COALESCE(SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END), 0),
+             COALESCE(SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END), 0),
+             ?, ?
+           FROM Responses WHERE participant_id = ? AND room_id = ?
+           ON DUPLICATE KEY UPDATE
+             total_points = VALUES(total_points),
+             correct_count = VALUES(correct_count),
+             wrong_count = VALUES(wrong_count),
+             highest_streak = VALUES(highest_streak),
+             final_rank = VALUES(final_rank)`,
+          [
+            participant.participant_id,
+            room.room_id,
+            participant.streak,
+            i + 1,
+            participant.participant_id,
+            room.room_id,
+          ],
+        )
+        .catch((err) => console.error("Score insert error:", err));
+    }
+
+    io.to(room_code).emit("quiz-end", {
+      forced,
+      leaderboard: sorted.map((participant, index) => ({
+        participant_id: participant.participant_id,
+        name: participant.name,
+        score: participant.score,
+        rank: index + 1,
+        streak: participant.streak,
+      })),
+    });
+
+    return true;
+  }
+
+  function emitParticipantSnapshot(room_code) {
+    const room = getRoom(room_code);
+    if (!room) return;
+
+    io.to(room_code).emit("participant-joined", {
+      count: Object.keys(room.participants).length,
+      participants: Object.values(room.participants).map((p) => ({
+        participant_id: p.participant_id,
+        name: p.name,
+      })),
+    });
+  }
+
+  function kickParticipant(room_code, participant_id) {
+    const found = findParticipant(room_code, participant_id);
+    if (!found) return false;
+
+    delete found.room.participants[found.socketId];
+    io.to(found.socketId).emit("kicked");
+    emitParticipantSnapshot(room_code);
+    return true;
+  }
+
+  function getSocketAdmin(socket) {
+    const token = socket.handshake.auth?.token;
+    if (!token) return null;
+
+    try {
+      return jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      return null;
+    }
+  }
+
+  function canManageRoom(socket, room) {
+    const admin = socket.adminUser;
+    if (!admin || !room) return false;
+    return admin.is_master || admin.admin_id === room.admin_id;
+  }
+
+  registerHandlers({
+    endRoom: endQuiz,
+    kickParticipant,
+  });
 
   io.on("connection", (socket) => {
+    socket.adminUser = getSocketAdmin(socket);
     console.log("Socket connected:", socket.id);
 
-    // ── ADMIN: Create room ────────────────────────────────
     socket.on(
       "create-room",
       async ({ quiz_id, admin_id, room_code, time_per_question }) => {
+        if (
+          !socket.adminUser ||
+          (!socket.adminUser.is_master &&
+            socket.adminUser.admin_id !== admin_id)
+        ) {
+          return socket.emit("error", { message: "Unauthorized room creation" });
+        }
+
         try {
           const [result] = await pool.query(
             `INSERT INTO Rooms (quiz_id, admin_id, room_code, status, current_question_index)
-           VALUES (?, ?, ?, 'waiting', 0)`,
+             VALUES (?, ?, ?, 'waiting', 0)`,
             [quiz_id, admin_id, room_code],
           );
           const room_id = result.insertId;
 
-          rooms[room_code] = {
+          createRoom(room_code, {
+            room_code,
             quiz_id,
             admin_id,
             room_id,
@@ -29,14 +151,14 @@ module.exports = function initSocket(io) {
             answers: {},
             questions: [],
             paused: false,
-          };
+            endQuiz: (forced = false) => endQuiz(room_code, forced),
+          });
 
           socket.join(room_code);
           socket.room_code = room_code;
           socket.is_admin = true;
 
           socket.emit("room-created", { room_id, room_code });
-          console.log(`Room created: ${room_code}`);
         } catch (err) {
           console.error("create-room error:", err);
           socket.emit("error", { message: "Failed to create room" });
@@ -44,9 +166,8 @@ module.exports = function initSocket(io) {
       },
     );
 
-    // ── STUDENT: Join room ────────────────────────────────
     socket.on("join-room", async ({ room_code, name }) => {
-      const room = rooms[room_code];
+      const room = getRoom(room_code);
       const safeName = (name || "Player").trim() || "Player";
       if (!room) return socket.emit("error", { message: "Room not found" });
       if (room.status !== "waiting")
@@ -79,31 +200,19 @@ module.exports = function initSocket(io) {
           name: safeName,
         });
 
-        io.to(room_code).emit("participant-joined", {
-          participant_id,
-          name: safeName,
-          count: Object.keys(room.participants).length,
-          participants: Object.values(room.participants).map((p) => ({
-            participant_id: p.participant_id,
-            name: p.name,
-          })),
-        });
-
-        console.log(`${safeName} joined room ${room_code}`);
+        emitParticipantSnapshot(room_code);
       } catch (err) {
         console.error("join-room error:", err);
         socket.emit("error", { message: "Failed to join room" });
       }
     });
 
-    // ── STUDENT: Rejoin after page navigation ─────────────
     socket.on("rejoin-room", async ({ room_code, participant_id, name }) => {
-      const room = rooms[room_code];
+      const room = getRoom(room_code);
       if (!room) return;
 
-      // Re-register socket in room with existing participant data
       const existing = Object.values(room.participants).find(
-        (p) => p.participant_id === participant_id,
+        (participant) => participant.participant_id === participant_id,
       );
 
       let resolvedName = (name || "").trim();
@@ -117,12 +226,10 @@ module.exports = function initSocket(io) {
         if (dbName && dbName.trim()) {
           resolvedName = dbName.trim();
         } else if (resolvedName) {
-          await pool
-            .query(`UPDATE Participants SET name = ? WHERE participant_id = ?`, [
-              resolvedName,
-              participant_id,
-            ])
-            .catch((err) => console.error("rejoin-room name update error:", err));
+          await pool.query(
+            `UPDATE Participants SET name = ? WHERE participant_id = ?`,
+            [resolvedName, participant_id],
+          );
         }
       } catch (err) {
         console.error("rejoin-room name lookup error:", err);
@@ -131,20 +238,16 @@ module.exports = function initSocket(io) {
       if (!resolvedName) resolvedName = "Player";
 
       if (existing) {
-        if (resolvedName) existing.name = resolvedName;
-
-        // Remove old socket entry
+        existing.name = resolvedName;
         const oldSocketId = Object.keys(room.participants).find(
           (sid) => room.participants[sid].participant_id === participant_id,
         );
         if (oldSocketId) delete room.participants[oldSocketId];
-
         room.participants[socket.id] = existing;
       } else {
-        // New entry if not found
         room.participants[socket.id] = {
           participant_id,
-          name: resolvedName || "Player",
+          name: resolvedName,
           score: 0,
           streak: 0,
           multiplier: 1,
@@ -154,68 +257,22 @@ module.exports = function initSocket(io) {
       socket.join(room_code);
       socket.room_code = room_code;
       socket.participant_id = participant_id;
+      emitParticipantSnapshot(room_code);
 
-      io.to(room_code).emit("participant-joined", {
-        count: Object.keys(room.participants).length,
-        participants: Object.values(room.participants).map((p) => ({
-          participant_id: p.participant_id,
-          name: p.name,
-        })),
-      });
-
-      // If quiz already in progress, send current question
       if (room.status === "active" && room.questions.length > 0) {
-        const q = room.questions[room.currentIndex];
-        const options = (
-          typeof q.options === "string" ? JSON.parse(q.options) : q.options
-        )
-          .sort((a, b) => a.option_number - b.option_number)
-          .map((o) => ({
-            option_number: o.option_number,
-            option_text: o.option_text,
-          }));
-
-        socket.emit("question-start", {
-          index: room.currentIndex,
-          total: room.questions.length,
-          question_id: q.question_id,
-          question_text: q.question_text,
-          genre: q.genre,
-          difficulty: q.difficulty,
-          base_points: q.base_points,
-          options,
-          time_per_question: room.timePerQuestion,
-        });
+        sendQuestion(io, room, room_code, socket);
       }
     });
 
-    // ── ADMIN: Kick participant ────────────────────────────
     socket.on("kick-participant", ({ room_code, participant_id }) => {
-      const room = rooms[room_code];
-      if (!room) return;
-
-      const entry = Object.entries(room.participants).find(
-        ([, p]) => p.participant_id === participant_id,
-      );
-      if (!entry) return;
-
-      const [kickedSocketId] = entry;
-      delete room.participants[kickedSocketId];
-
-      io.to(kickedSocketId).emit("kicked");
-      io.to(room_code).emit("participant-joined", {
-        count: Object.keys(room.participants).length,
-        participants: Object.values(room.participants).map((p) => ({
-          participant_id: p.participant_id,
-          name: p.name,
-        })),
-      });
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
+      kickParticipant(room_code, participant_id);
     });
 
-    // ── ADMIN: Start quiz ─────────────────────────────────
     socket.on("start-quiz", async ({ room_code }) => {
-      const room = rooms[room_code];
-      if (!room) return;
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
 
       try {
         const [questions] = await pool.query(
@@ -257,11 +314,10 @@ module.exports = function initSocket(io) {
       }
     });
 
-    // ── STUDENT: Submit answer ────────────────────────────
     socket.on(
       "submit-answer",
       ({ room_code, question_id, selected_option, response_time_ms }) => {
-        const room = rooms[room_code];
+        const room = getRoom(room_code);
         if (!room || room.status !== "active") return;
 
         const participant = room.participants[socket.id];
@@ -269,7 +325,7 @@ module.exports = function initSocket(io) {
 
         const idx = room.currentIndex;
         if (!room.answers[idx]) room.answers[idx] = {};
-        if (room.answers[idx][participant.participant_id]) return; // no double answer
+        if (room.answers[idx][participant.participant_id]) return;
 
         const question = room.questions[idx];
         const options =
@@ -278,9 +334,8 @@ module.exports = function initSocket(io) {
             : question.options;
         const correctOption = options.find((o) => o.is_correct)?.option_number;
         const is_correct =
-          parseInt(selected_option) === parseInt(correctOption);
+          parseInt(selected_option, 10) === parseInt(correctOption, 10);
 
-        // Streak & multiplier
         if (is_correct) {
           participant.streak += 1;
           if (participant.streak >= 4) participant.multiplier = 2;
@@ -295,8 +350,7 @@ module.exports = function initSocket(io) {
         const timeLimit = room.timePerQuestion * 1000;
         const speedBonus = is_correct
           ? Math.round(
-              ((timeLimit - Math.min(response_time_ms, timeLimit)) /
-                timeLimit) *
+              ((timeLimit - Math.min(response_time_ms, timeLimit)) / timeLimit) *
                 200,
             )
           : 0;
@@ -318,7 +372,7 @@ module.exports = function initSocket(io) {
         pool
           .query(
             `INSERT INTO Responses (participant_id, question_id, room_id, selected_option, is_correct, response_time_ms, points_earned)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+             VALUES (?, ?, ?, ?, ?, ?, ?)`,
             [
               participant.participant_id,
               question_id,
@@ -343,171 +397,143 @@ module.exports = function initSocket(io) {
         const answered = Object.keys(room.answers[idx]).length;
         const total = Object.keys(room.participants).length;
         const correct = Object.values(room.answers[idx]).filter(
-          (a) => a.is_correct,
+          (answer) => answer.is_correct,
         ).length;
         io.to(room_code).emit("answer-stats", { answered, total, correct });
       },
     );
 
-    // ── ADMIN: Next question ──────────────────────────────
     socket.on("next-question", ({ room_code }) => {
-      const room = rooms[room_code];
-      if (!room) return;
-      advanceQuestion(io, room, room_code);
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
+      advanceQuestion(io, room, room_code, endQuiz);
     });
 
-    // ── ADMIN: Pause / Resume ─────────────────────────────
     socket.on("pause-quiz", ({ room_code }) => {
-      const room = rooms[room_code];
-      if (!room) return;
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
       room.paused = true;
       if (room.questionTimer) clearTimeout(room.questionTimer);
       io.to(room_code).emit("quiz-paused");
     });
 
     socket.on("resume-quiz", ({ room_code }) => {
-      const room = rooms[room_code];
-      if (!room) return;
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
       room.paused = false;
       io.to(room_code).emit("quiz-resumed");
       sendQuestion(io, room, room_code);
     });
 
-    // ── Disconnect ────────────────────────────────────────
+    socket.on("end-quiz", async ({ room_code, forced }) => {
+      const room = getRoom(room_code);
+      if (!room || !canManageRoom(socket, room)) return;
+      await endQuiz(room_code, Boolean(forced));
+    });
+
     socket.on("disconnect", () => {
       const room_code = socket.room_code;
-      if (!room_code || !rooms[room_code]) return;
-      const room = rooms[room_code];
+      const room = room_code ? getRoom(room_code) : null;
+      if (!room) return;
 
       if (!socket.is_admin && room.participants[socket.id]) {
         delete room.participants[socket.id];
-        io.to(room_code).emit("participant-joined", {
-          count: Object.keys(room.participants).length,
-          participants: Object.values(room.participants).map((p) => ({
-            participant_id: p.participant_id,
-            name: p.name,
-          })),
-        });
+        emitParticipantSnapshot(room_code);
       }
-      console.log("Socket disconnected:", socket.id);
+
+      if (
+        room.status === "ended" &&
+        Object.keys(room.participants).length === 0 &&
+        !room.questions.length
+      ) {
+        removeRoom(room_code);
+      }
     });
   });
-
-  // ── Send current question ─────────────────────────────────
-  function sendQuestion(io, room, room_code) {
-    const q = room.questions[room.currentIndex];
-    const options = (
-      typeof q.options === "string" ? JSON.parse(q.options) : q.options
-    )
-      .sort((a, b) => a.option_number - b.option_number)
-      .map((o) => ({
-        option_number: o.option_number,
-        option_text: o.option_text,
-      }));
-
-    room.questionStartTime = Date.now();
-
-    io.to(room_code).emit("question-start", {
-      index: room.currentIndex,
-      total: room.questions.length,
-      question_id: q.question_id,
-      question_text: q.question_text,
-      genre: q.genre,
-      difficulty: q.difficulty,
-      base_points: q.base_points,
-      options,
-      time_per_question: room.timePerQuestion,
-    });
-
-    room.questionTimer = setTimeout(
-      () => {
-        if (!room.paused) advanceQuestion(io, room, room_code);
-      },
-      (room.timePerQuestion + 3) * 1000,
-    );
-  }
-
-  // ── Advance to next question or end ──────────────────────
-  async function advanceQuestion(io, room, room_code) {
-    if (room.questionTimer) clearTimeout(room.questionTimer);
-
-    const q = room.questions[room.currentIndex];
-    const options =
-      typeof q.options === "string" ? JSON.parse(q.options) : q.options;
-    const correctOption = options.find((o) => o.is_correct)?.option_number;
-
-    io.to(room_code).emit("question-end", {
-      correct_option: correctOption,
-      index: room.currentIndex,
-      leaderboard: getLeaderboard(room),
-    });
-
-    await new Promise((r) => setTimeout(r, 3000));
-
-    room.currentIndex += 1;
-
-    if (room.currentIndex < room.questions.length) {
-      room.answers[room.currentIndex] = {};
-      sendQuestion(io, room, room_code);
-    } else {
-      await endQuiz(io, room, room_code);
-    }
-  }
-
-  // ── End quiz & save scores ────────────────────────────────
-  async function endQuiz(io, room, room_code) {
-    room.status = "ended";
-
-    await pool
-      .query(
-        `UPDATE Rooms SET status = 'ended', ended_at = NOW() WHERE room_id = ?`,
-        [room.room_id],
-      )
-      .catch((err) => console.error("Room update error:", err));
-
-    const sorted = Object.values(room.participants).sort(
-      (a, b) => b.score - a.score,
-    );
-
-    for (let i = 0; i < sorted.length; i++) {
-      const p = sorted[i];
-      await pool
-        .query(
-          `INSERT INTO Scores (participant_id, room_id, total_points, correct_count, wrong_count, highest_streak, final_rank)
-         SELECT ?, ?,
-           COALESCE(SUM(points_earned), 0),
-           COALESCE(SUM(CASE WHEN is_correct = 1 THEN 1 ELSE 0 END), 0),
-           COALESCE(SUM(CASE WHEN is_correct = 0 THEN 1 ELSE 0 END), 0),
-           ?, ?
-         FROM Responses WHERE participant_id = ? AND room_id = ?`,
-          [
-            p.participant_id,
-            room.room_id,
-            p.streak,
-            i + 1,
-            p.participant_id,
-            room.room_id,
-          ],
-        )
-        .catch((err) => console.error("Score insert error:", err));
-    }
-
-    io.to(room_code).emit("quiz-end", {
-      leaderboard: sorted.map((p, i) => ({
-        participant_id: p.participant_id,
-        name: p.name,
-        score: p.score,
-        rank: i + 1,
-        streak: p.streak,
-      })),
-    });
-  }
-
-  // ── Get leaderboard snapshot ──────────────────────────────
-  function getLeaderboard(room) {
-    return Object.values(room.participants)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
-      .map((p, i) => ({ name: p.name, score: p.score, rank: i + 1 }));
-  }
 };
+
+function sendQuestion(io, room, room_code, targetSocket = null) {
+  const question = room.questions[room.currentIndex];
+  if (!question) return;
+
+  const options = (
+    typeof question.options === "string"
+      ? JSON.parse(question.options)
+      : question.options
+  )
+    .sort((a, b) => a.option_number - b.option_number)
+    .map((option) => ({
+      option_number: option.option_number,
+      option_text: option.option_text,
+    }));
+
+  room.questionStartTime = Date.now();
+
+  const payload = {
+    index: room.currentIndex,
+    total: room.questions.length,
+    question_id: question.question_id,
+    question_text: question.question_text,
+    genre: question.genre,
+    difficulty: question.difficulty,
+    base_points: question.base_points,
+    options,
+    time_per_question: room.timePerQuestion,
+  };
+
+  if (targetSocket) {
+    targetSocket.emit("question-start", payload);
+    return;
+  }
+
+  io.to(room_code).emit("question-start", payload);
+
+  room.questionTimer = setTimeout(() => {
+    if (!room.paused) {
+      advanceQuestion(io, room, room_code, (code, forced) =>
+        room.endQuiz ? room.endQuiz(forced) : false,
+      );
+    }
+  }, (room.timePerQuestion + 3) * 1000);
+}
+
+async function advanceQuestion(io, room, room_code, endQuiz) {
+  if (room.questionTimer) clearTimeout(room.questionTimer);
+
+  const question = room.questions[room.currentIndex];
+  if (!question) return;
+
+  const options =
+    typeof question.options === "string"
+      ? JSON.parse(question.options)
+      : question.options;
+  const correctOption = options.find((option) => option.is_correct)?.option_number;
+
+  io.to(room_code).emit("question-end", {
+    correct_option: correctOption,
+    index: room.currentIndex,
+    leaderboard: getLeaderboard(room),
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  room.currentIndex += 1;
+
+  if (room.currentIndex < room.questions.length) {
+    room.answers[room.currentIndex] = {};
+    sendQuestion(io, room, room_code);
+  } else {
+    await endQuiz(room_code, false);
+  }
+}
+
+function getLeaderboard(room) {
+  return Object.values(room.participants)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10)
+    .map((participant, index) => ({
+      name: participant.name,
+      score: participant.score,
+      rank: index + 1,
+    }));
+}

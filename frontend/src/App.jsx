@@ -8,6 +8,7 @@ import QuestionBank from "./pages/admin/QuestionBank";
 import CreateQuiz from "./pages/admin/CreateQuiz";
 import LiveRoom from "./pages/admin/LiveRoom";
 import PastRooms from "./pages/admin/PastRooms";
+import MasterAdminDashboard from "./pages/admin/MasterAdminDashboard";
 import StaticQuiz from "./pages/student/StaticQuiz";
 import Result from "./pages/student/Result";
 import WaitingRoom from "./pages/student/WaitingRoom";
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/admin/create-quiz" element={<CreateQuiz />} />
           <Route path="/admin/live" element={<LiveRoom />} />
           <Route path="/admin/rooms" element={<PastRooms />} />
+          <Route path="/admin/master" element={<MasterAdminDashboard />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

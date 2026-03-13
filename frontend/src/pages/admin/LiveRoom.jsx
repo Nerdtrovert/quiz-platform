@@ -41,12 +41,17 @@ export default function LiveRoom() {
   const timerRef = useRef(null);
 
   useEffect(() => {
+    if (admin.is_master) {
+      navigate("/admin/master");
+      return undefined;
+    }
+
     fetchQuizzes();
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, []);
+  }, [admin.is_master, navigate]);
 
   const fetchQuizzes = async () => {
     try {
@@ -59,7 +64,11 @@ export default function LiveRoom() {
   const handleCreateRoom = () => {
     if (!selectedQuiz) return;
 
-    const socket = io(SOCKET_URL);
+    const socket = io(SOCKET_URL, {
+      auth: {
+        token: localStorage.getItem("token"),
+      },
+    });
     socketRef.current = socket;
 
     socket.on("connect", () => {
@@ -149,6 +158,10 @@ export default function LiveRoom() {
     } else {
       socketRef.current?.emit("pause-quiz", { room_code: roomCode });
     }
+  };
+
+  const handleEndQuiz = () => {
+    socketRef.current?.emit("end-quiz", { room_code: roomCode, forced: true });
   };
 
   const handleKick = (participant_id) => {
@@ -329,18 +342,23 @@ export default function LiveRoom() {
                 <h1 style={s.title}>Waiting for participants</h1>
                 <p style={s.subtitle}>{selectedQuiz?.title}</p>
               </div>
-              <button
-                style={{
-                  ...s.startBtn,
-                  ...(participants.length === 0
-                    ? { opacity: 0.4, cursor: "not-allowed" }
-                    : {}),
-                }}
-                onClick={handleStartQuiz}
-                disabled={participants.length === 0}
-              >
-                ⚡ Start Quiz ({participants.length})
-              </button>
+              <div style={s.waitingActions}>
+                <button style={s.endBtnGhost} onClick={handleEndQuiz}>
+                  End Room
+                </button>
+                <button
+                  style={{
+                    ...s.startBtn,
+                    ...(participants.length === 0
+                      ? { opacity: 0.4, cursor: "not-allowed" }
+                      : {}),
+                  }}
+                  onClick={handleStartQuiz}
+                  disabled={participants.length === 0}
+                >
+                  ⚡ Start Quiz ({participants.length})
+                </button>
+              </div>
             </div>
 
             <div style={s.roomCodeDisplay}>
@@ -390,6 +408,9 @@ export default function LiveRoom() {
                 <div style={s.liveControls}>
                   <button style={s.pauseBtn} onClick={handlePauseResume}>
                     {paused ? "▶ Resume" : "⏸ Pause"}
+                  </button>
+                  <button style={s.endBtnGhost} onClick={handleEndQuiz}>
+                    End Quiz
                   </button>
                 </div>
               </div>
@@ -722,6 +743,11 @@ const s = {
     justifyContent: "space-between",
     marginBottom: "1.5rem",
   },
+  waitingActions: {
+    display: "flex",
+    gap: "0.7rem",
+    alignItems: "center",
+  },
   startBtn: {
     background: "linear-gradient(135deg, #f5a623, #e8940f)",
     border: "none",
@@ -847,6 +873,16 @@ const s = {
     background: "transparent",
     border: "1px solid #333",
     color: "#888",
+    padding: "0.4rem 0.9rem",
+    borderRadius: "6px",
+    fontSize: "0.75rem",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+  endBtnGhost: {
+    background: "transparent",
+    border: "1px solid rgba(239,68,68,0.35)",
+    color: "#f87171",
     padding: "0.4rem 0.9rem",
     borderRadius: "6px",
     fontSize: "0.75rem",
