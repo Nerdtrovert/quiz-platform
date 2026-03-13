@@ -10,16 +10,28 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+function getStoredHostRoom(adminId) {
+  try {
+    const raw = localStorage.getItem(`host_room_${adminId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function LiveRoom() {
   const navigate = useNavigate();
   const admin = JSON.parse(localStorage.getItem("admin") || "{}");
   const socketRef = useRef(null);
+  const storedRoom = getStoredHostRoom(admin.admin_id);
 
   // Setup
   const [quizzes, setQuizzes] = useState([]);
   const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
-  const [roomCode] = useState(generateRoomCode);
+  const [roomCode, setRoomCode] = useState(
+    () => storedRoom?.room_code || generateRoomCode(),
+  );
 
   // Room state
   const [participants, setParticipants] = useState([]);
@@ -46,6 +58,9 @@ export default function LiveRoom() {
     }
 
     fetchQuizzes();
+    if (storedRoom?.room_code) {
+      connectAsHost(storedRoom.room_code, true);
+    }
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       if (timerRef.current) clearInterval(timerRef.current);
@@ -55,14 +70,21 @@ export default function LiveRoom() {
   const fetchQuizzes = async () => {
     try {
       const res = await api.get("/quizzes");
-      setQuizzes(res.data.quizzes || []);
-      setStaticQuizzes(res.data.staticQuizzes || []);
+      const ownQuizzes = res.data.quizzes || [];
+      const presetQuizzes = res.data.staticQuizzes || [];
+      setQuizzes(ownQuizzes);
+      setStaticQuizzes(presetQuizzes);
+
+      if (storedRoom?.quiz_id) {
+        const matched = [...presetQuizzes, ...ownQuizzes].find(
+          (quiz) => quiz.quiz_id === storedRoom.quiz_id,
+        );
+        if (matched) setSelectedQuiz(matched);
+      }
     } catch {}
   };
 
-  const handleCreateRoom = () => {
-    if (!selectedQuiz) return;
-
+  const connectAsHost = (nextRoomCode, recoverOnly = false) => {
     const socket = io(SOCKET_URL, {
       auth: {
         token: localStorage.getItem("token"),
@@ -71,16 +93,49 @@ export default function LiveRoom() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      if (recoverOnly) {
+        socket.emit("admin-room-sync", {
+          room_code: nextRoomCode,
+        });
+        return;
+      }
+
       socket.emit("create-room", {
         quiz_id: selectedQuiz.quiz_id,
         admin_id: admin.admin_id,
-        room_code: roomCode,
+        room_code: nextRoomCode,
         time_per_question: selectedQuiz.time_per_question || 30,
       });
     });
 
     socket.on("room-created", () => {
+      localStorage.setItem(
+        `host_room_${admin.admin_id}`,
+        JSON.stringify({
+          room_code: nextRoomCode,
+          quiz_id: selectedQuiz.quiz_id,
+        }),
+      );
       setStatus("waiting");
+    });
+
+    socket.on("room-synced", (payload) => {
+      setRoomCode(payload.room_code);
+      setParticipants(payload.participants || []);
+      setLeaderboard(payload.leaderboard || []);
+      setQuestionIndex(payload.current_question_index || 0);
+      setTotalQuestions(payload.total_questions || 0);
+      setPaused(Boolean(payload.paused));
+
+      if (payload.current_question) {
+        setCurrentQuestion(payload.current_question);
+        setTimeLeft(payload.current_question.time_per_question || 0);
+      }
+
+      if (payload.status === "waiting") setStatus("waiting");
+      else if (payload.status === "active" || payload.status === "paused")
+        setStatus("active");
+      else setStatus(payload.status || "setup");
     });
 
     socket.on("participant-joined", ({ participants }) => {
@@ -131,13 +186,25 @@ export default function LiveRoom() {
     socket.on("quiz-end", ({ leaderboard }) => {
       setLeaderboard(leaderboard || []);
       setStatus("ended");
+      localStorage.removeItem(`host_room_${admin.admin_id}`);
       if (timerRef.current) clearInterval(timerRef.current);
     });
 
     socket.on("quiz-paused", () => setPaused(true));
     socket.on("quiz-resumed", () => setPaused(false));
 
-    socket.on("error", ({ message }) => alert(message));
+    socket.on("error", ({ message }) => {
+      if (recoverOnly) {
+        localStorage.removeItem(`host_room_${admin.admin_id}`);
+        setStatus("setup");
+      }
+      alert(message);
+    });
+  };
+
+  const handleCreateRoom = () => {
+    if (!selectedQuiz) return;
+    connectAsHost(roomCode, false);
   };
 
   const handleStartQuiz = () => {
