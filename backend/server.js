@@ -16,10 +16,6 @@ const io = new Server(server, {
 
 app.use(cors());
 app.use(express.json());
-app.use((req, _res, next) => {
-  req.io = io;
-  next();
-});
 
 // ── Routes ────────────────────────────────────────────────
 app.use("/api/auth", require("./routes/auth.routes"));
@@ -38,3 +34,4 @@ initSocket(io);
 // ── Start ─────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+

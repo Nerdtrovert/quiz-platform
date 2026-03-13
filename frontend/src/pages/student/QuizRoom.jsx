@@ -88,23 +88,14 @@ export default function QuizRoom() {
     socket.on("quiz-resumed", () => setPaused(false));
 
     socket.on("quiz-end", ({ leaderboard }) => {
-      const safeLeaderboard = leaderboard || [];
-      const finalScore = score;
-      setStatus("ended");
-      setFinalLeaderboard(safeLeaderboard);
-      setCurrentQuestion(null);
+      const lb = leaderboard || [];
+      const savedName = sessionStorage.getItem("player_name") || playerName;
       sessionStorage.clear();
-      navigate(`/leaderboard/${roomCode}`, {
-        replace: true,
-        state: {
-          leaderboard: safeLeaderboard,
-          roomCode,
-          playerName,
-          score: finalScore,
-          isHost: false,
-          quizTitle: "Live Quiz",
-        },
-      });
+      setFinalLeaderboard(lb);
+      setCurrentQuestion(null);
+      const myEntry = lb.find((e) => e.name === savedName);
+      if (myEntry) setScore(myEntry.score);
+      setStatus("ended");
     });
 
     socket.on("kicked", () => {

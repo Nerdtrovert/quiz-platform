@@ -3,15 +3,14 @@ const pool = require("../config/db");
 // ─── GET ALL QUIZZES FOR ADMIN (own + static presets) ────
 exports.getQuizzes = async (req, res) => {
   const admin_id = req.user.admin_id;
-  const isMaster = Boolean(req.user.is_master);
   try {
     const [quizzes] = await pool.query(
       `SELECT q.*,
         (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
        FROM Quizzes q
-       WHERE (? = 1 OR q.admin_id = ?) AND q.is_static = 0
+       WHERE q.admin_id = ? AND q.is_static = 0
        ORDER BY q.created_at DESC`,
-      [isMaster ? 1 : 0, admin_id],
+      [admin_id],
     );
 
     // Also fetch static preset quizzes (admin_id=1, is_static=1)
@@ -56,7 +55,7 @@ exports.getQuizById = async (req, res) => {
        LEFT JOIN Options o ON qb.question_id = o.question_id
        WHERE qq.quiz_id = ?
        GROUP BY qb.question_id, qq.order_index
-       ORDER BY qq.order_index ASC`,
+       ORDER BY RAND()`,
       [id],
     );
 
@@ -72,27 +71,11 @@ exports.createQuiz = async (req, res) => {
   const { title, genre, difficulty, time_per_question, question_ids } =
     req.body;
   const admin_id = req.user.admin_id;
-  const allowedTimes = [10, 20, 30, 60];
-
-  if (req.user.is_master) {
-    return res
-      .status(403)
-      .json({ message: "Master admin cannot create quizzes from this screen" });
-  }
 
   if (!title || !question_ids || question_ids.length === 0)
     return res
       .status(400)
       .json({ message: "Title and at least one question are required" });
-
-  if (
-    time_per_question != null &&
-    !allowedTimes.includes(Number(time_per_question))
-  ) {
-    return res.status(400).json({
-      message: "Time per question must be one of: 10, 20, 30, 60 seconds",
-    });
-  }
 
   const conn = await pool.getConnection();
   try {
@@ -107,7 +90,7 @@ exports.createQuiz = async (req, res) => {
         genre || "Mixed",
         difficulty || "medium",
         question_ids.length,
-        Number(time_per_question) || 30,
+        time_per_question || 30,
       ],
     );
     const quiz_id = result.insertId;
@@ -134,7 +117,6 @@ exports.createQuiz = async (req, res) => {
 exports.deleteQuiz = async (req, res) => {
   const { id } = req.params;
   const admin_id = req.user.admin_id;
-  const isMaster = Boolean(req.user.is_master);
   try {
     const [rows] = await pool.query(
       "SELECT admin_id FROM Quizzes WHERE quiz_id = ?",
@@ -142,7 +124,7 @@ exports.deleteQuiz = async (req, res) => {
     );
     if (rows.length === 0)
       return res.status(404).json({ message: "Quiz not found" });
-    if (!isMaster && rows[0].admin_id !== admin_id)
+    if (rows[0].admin_id !== admin_id)
       return res.status(403).json({ message: "Not your quiz" });
 
     await pool.query("DELETE FROM QuizQuestions WHERE quiz_id = ?", [id]);
