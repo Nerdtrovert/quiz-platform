@@ -14,6 +14,7 @@ import Result from "./pages/student/Result";
 import WaitingRoom from "./pages/student/WaitingRoom";
 import QuizRoom from "./pages/student/QuizRoom";
 import FinalLeaderboard from "./pages/student/FinalLeaderboard";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
   return (
@@ -27,12 +28,54 @@ export default function App() {
           <Route path="/quiz/live/:roomCode" element={<QuizRoom />} />
           <Route path="/leaderboard/:roomCode" element={<FinalLeaderboard />} />
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin" element={<AdminDashboard />} />
-          <Route path="/admin/questions" element={<QuestionBank />} />
-          <Route path="/admin/create-quiz" element={<CreateQuiz />} />
-          <Route path="/admin/live" element={<LiveRoom />} />
-          <Route path="/admin/rooms" element={<PastRooms />} />
-          <Route path="/admin/master" element={<MasterAdminDashboard />} />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/questions"
+            element={
+              <ProtectedRoute>
+                <QuestionBank />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/create-quiz"
+            element={
+              <ProtectedRoute>
+                <CreateQuiz />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/live"
+            element={
+              <ProtectedRoute>
+                <LiveRoom />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/rooms"
+            element={
+              <ProtectedRoute>
+                <PastRooms />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/master"
+            element={
+              <ProtectedRoute requireMaster>
+                <MasterAdminDashboard />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>

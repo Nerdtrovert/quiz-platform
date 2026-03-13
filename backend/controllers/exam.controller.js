@@ -72,6 +72,7 @@ exports.createQuiz = async (req, res) => {
   const { title, genre, difficulty, time_per_question, question_ids } =
     req.body;
   const admin_id = req.user.admin_id;
+  const allowedTimes = [10, 20, 30, 60];
 
   if (req.user.is_master) {
     return res
@@ -83,6 +84,15 @@ exports.createQuiz = async (req, res) => {
     return res
       .status(400)
       .json({ message: "Title and at least one question are required" });
+
+  if (
+    time_per_question != null &&
+    !allowedTimes.includes(Number(time_per_question))
+  ) {
+    return res.status(400).json({
+      message: "Time per question must be one of: 10, 20, 30, 60 seconds",
+    });
+  }
 
   const conn = await pool.getConnection();
   try {
@@ -97,7 +107,7 @@ exports.createQuiz = async (req, res) => {
         genre || "Mixed",
         difficulty || "medium",
         question_ids.length,
-        time_per_question || 30,
+        Number(time_per_question) || 30,
       ],
     );
     const quiz_id = result.insertId;
