@@ -17,6 +17,7 @@ export default function LiveRoom() {
 
   // Setup
   const [quizzes, setQuizzes] = useState([]);
+  const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [roomCode] = useState(generateRoomCode);
   const [roomCreated, setRoomCreated] = useState(false);
@@ -50,7 +51,8 @@ export default function LiveRoom() {
   const fetchQuizzes = async () => {
     try {
       const res = await api.get("/quizzes");
-      setQuizzes(res.data.quizzes);
+      setQuizzes(res.data.quizzes || []);
+      setStaticQuizzes(res.data.staticQuizzes || []);
     } catch {}
   };
 
@@ -181,13 +183,14 @@ export default function LiveRoom() {
             {[
               { icon: "⚡", label: "Dashboard", path: "/admin" },
               { icon: "🗃", label: "Question Bank", path: "/admin/questions" },
-              { icon: "📝", label: "My Quizzes", path: "/admin/create-quiz" },
+              { icon: "📝", label: "Create Quiz", path: "/admin/create-quiz" },
               {
                 icon: "🚀",
-                label: "Live Room",
+                label: "Start Room",
                 path: "/admin/live",
                 active: true,
               },
+              { icon: "📊", label: "Past Rooms", path: "/admin/rooms" },
             ].map((item) => (
               <button
                 key={item.path}
@@ -232,11 +235,45 @@ export default function LiveRoom() {
 
               <div style={s.fieldBlock}>
                 <label style={s.label}>SELECT QUIZ</label>
+
+                {/* ── Preset Static Quizzes ── */}
+                <div style={s.quizSectionLabel}>⚡ Preset Quizzes</div>
+                <div style={s.quizList}>
+                  {staticQuizzes.map((q) => (
+                    <div
+                      key={q.quiz_id}
+                      style={{
+                        ...s.quizOption,
+                        ...s.quizOptionPreset,
+                        ...(selectedQuiz?.quiz_id === q.quiz_id
+                          ? s.quizOptionSelected
+                          : {}),
+                      }}
+                      onClick={() => setSelectedQuiz(q)}
+                    >
+                      <div style={s.quizOptionLeft}>
+                        <span style={s.quizOptionTitle}>{q.title}</span>
+                        <span style={s.quizOptionMeta}>
+                          {q.question_count} questions · {q.time_per_question}s
+                          · mixed difficulty
+                        </span>
+                      </div>
+                      {selectedQuiz?.quiz_id === q.quiz_id && (
+                        <span style={s.checkMark}>✓</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* ── Your Quizzes ── */}
+                <div style={{ ...s.quizSectionLabel, marginTop: "1rem" }}>
+                  📝 Your Quizzes
+                </div>
                 {quizzes.length === 0 ? (
                   <p style={s.emptyNote}>
                     No quizzes yet.{" "}
                     <a href="/admin/create-quiz" style={{ color: "#f5a623" }}>
-                      Create one first.
+                      Create one →
                     </a>
                   </p>
                 ) : (
@@ -634,6 +671,18 @@ const s = {
   fieldBlock: { display: "flex", flexDirection: "column", gap: "0.6rem" },
   emptyNote: { fontSize: "0.78rem", color: "#666" },
   quizList: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+  quizSectionLabel: {
+    fontSize: "0.65rem",
+    fontWeight: "700",
+    color: "#666",
+    letterSpacing: "0.1em",
+    textTransform: "uppercase",
+    marginBottom: "0.4rem",
+  },
+  quizOptionPreset: {
+    borderColor: "rgba(245,166,35,0.15)",
+    background: "rgba(245,166,35,0.03)",
+  },
   quizOption: {
     display: "flex",
     alignItems: "center",

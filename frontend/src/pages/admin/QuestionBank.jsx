@@ -121,8 +121,8 @@ export default function QuestionBank() {
                 path: "/admin/questions",
                 active: true,
               },
-              { icon: "📝", label: "My Quizzes", path: "/admin/create-quiz" },
-              { icon: "🚀", label: "Start Room", path: "/admin/create-exam" },
+              { icon: "📝", label: "Create Quiz", path: "/admin/create-quiz" },
+              { icon: "🚀", label: "Start Room", path: "/admin/live" },
             ].map((item) => (
               <button
                 key={item.path}

@@ -11,6 +11,7 @@ export default function AdminDashboard() {
     rooms: 0,
     participants: 0,
   });
+  const [recentRooms, setRecentRooms] = useState([]);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -21,7 +22,16 @@ export default function AdminDashboard() {
         setStats({ quizzes: 0, questions: 0, rooms: 0, participants: 0 });
       }
     };
+    const fetchRecentRooms = async () => {
+      try {
+        const res = await api.get("/admin/rooms");
+        setRecentRooms(res.data.rooms.slice(0, 5));
+      } catch {
+        setRecentRooms([]);
+      }
+    };
     fetchStats();
+    fetchRecentRooms();
   }, []);
 
   const handleLogout = () => {
@@ -48,6 +58,7 @@ export default function AdminDashboard() {
               { icon: "🗃", label: "Question Bank", path: "/admin/questions" },
               { icon: "📝", label: "Create Quiz", path: "/admin/create-quiz" },
               { icon: "🚀", label: "Start Room", path: "/admin/live" },
+              { icon: "📊", label: "Past Rooms", path: "/admin/rooms" },
             ].map((item) => (
               <button
                 key={item.path}
@@ -165,9 +176,9 @@ export default function AdminDashboard() {
             },
             {
               icon: "📊",
-              title: "View Stats",
-              desc: "See how participants performed across all your quizzes",
-              action: () => navigate("/admin/questions"),
+              title: "Past Rooms",
+              desc: "View history of all live quiz sessions you've hosted",
+              action: () => navigate("/admin/rooms"),
             },
           ].map((item, i) => (
             <div
@@ -187,17 +198,61 @@ export default function AdminDashboard() {
         </div>
 
         {/* Recent Rooms */}
-        <div style={s.sectionTitle}>Recent Rooms</div>
-        <div style={s.emptyState}>
-          <div style={s.emptyIcon}>🚀</div>
-          <p style={s.emptyText}>No rooms hosted yet</p>
-          <p style={s.emptySubText}>
-            Start your first live quiz room to see activity here
-          </p>
-          <button style={s.emptyBtn} onClick={() => navigate("/admin/live")}>
-            Start a Room
-          </button>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "1rem",
+          }}
+        >
+          <div style={s.sectionTitle}>Recent Rooms</div>
+          {recentRooms.length > 0 && (
+            <button
+              style={s.viewAllBtn}
+              onClick={() => navigate("/admin/rooms")}
+            >
+              View All →
+            </button>
+          )}
         </div>
+
+        {recentRooms.length === 0 ? (
+          <div style={s.emptyState}>
+            <div style={s.emptyIcon}>🚀</div>
+            <p style={s.emptyText}>No rooms hosted yet</p>
+            <p style={s.emptySubText}>
+              Start your first live quiz room to see activity here
+            </p>
+            <button style={s.emptyBtn} onClick={() => navigate("/admin/live")}>
+              Start a Room
+            </button>
+          </div>
+        ) : (
+          <div style={s.recentList}>
+            {recentRooms.map((room) => (
+              <div key={room.room_id} style={s.recentRow}>
+                <span style={s.recentCode}>{room.room_code}</span>
+                <span style={s.recentTitle}>{room.quiz_title}</span>
+                <span style={s.recentPlayers}>👥 {room.participant_count}</span>
+                <span
+                  style={{
+                    ...s.recentStatus,
+                    color: room.status === "ended" ? "#10b981" : "#f5a623",
+                  }}
+                >
+                  {room.status}
+                </span>
+                <button
+                  style={s.recentViewBtn}
+                  onClick={() => navigate("/admin/rooms")}
+                >
+                  View →
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </main>
     </div>
   );
@@ -438,5 +493,59 @@ const s = {
     fontSize: "0.82rem",
     fontWeight: "800",
     cursor: "pointer",
+  },
+  viewAllBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#f5a623",
+    fontSize: "0.78rem",
+    fontWeight: "700",
+    cursor: "pointer",
+  },
+  recentList: { display: "flex", flexDirection: "column", gap: "0.5rem" },
+  recentRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+    background: "#0f0f0f",
+    border: "1px solid #1e1e1e",
+    borderRadius: "10px",
+    padding: "0.8rem 1.2rem",
+  },
+  recentCode: {
+    fontSize: "0.72rem",
+    fontWeight: "800",
+    color: "#f5a623",
+    letterSpacing: "0.15em",
+    fontFamily: "'JetBrains Mono', monospace",
+    background: "rgba(245,166,35,0.08)",
+    border: "1px solid rgba(245,166,35,0.2)",
+    padding: "0.1rem 0.4rem",
+    borderRadius: "4px",
+    flexShrink: 0,
+  },
+  recentTitle: {
+    flex: 1,
+    fontSize: "0.85rem",
+    fontWeight: "700",
+    color: "#f0e8d8",
+  },
+  recentPlayers: { fontSize: "0.75rem", color: "#888", flexShrink: 0 },
+  recentStatus: {
+    fontSize: "0.7rem",
+    fontWeight: "700",
+    textTransform: "capitalize",
+    flexShrink: 0,
+  },
+  recentViewBtn: {
+    background: "transparent",
+    border: "1px solid #2a2a2a",
+    color: "#888",
+    padding: "0.3rem 0.7rem",
+    borderRadius: "6px",
+    fontSize: "0.72rem",
+    fontWeight: "600",
+    cursor: "pointer",
+    flexShrink: 0,
   },
 };

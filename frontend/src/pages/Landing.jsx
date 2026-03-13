@@ -2,10 +2,42 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const STATIC_QUIZZES = [
-  { id: 1, title: "Science Blast", genre: "Science", icon: "⚗️", desc: "Physics, Chemistry, Biology", difficulty: "Medium", players: "2.4k" },
-  { id: 2, title: "History Hunt", genre: "History", icon: "📜", desc: "Ancient to Modern History", difficulty: "Medium", players: "1.8k" },
-  { id: 3, title: "Tech Talk", genre: "Tech", icon: "💻", desc: "CS, Programming, AI", difficulty: "Medium", players: "3.1k" },
-  { id: 4, title: "Mixed Madness", genre: "Mixed", icon: "🎲", desc: "Everything, everywhere", difficulty: "Mixed", players: "4.2k" },
+  {
+    id: 1,
+    title: "Science Blast",
+    genre: "Science",
+    icon: "⚗️",
+    desc: "Physics, Chemistry, Biology",
+    difficulty: "Medium",
+    players: "2.4k",
+  },
+  {
+    id: 2,
+    title: "History Hunt",
+    genre: "History",
+    icon: "📜",
+    desc: "Ancient to Modern History",
+    difficulty: "Medium",
+    players: "1.8k",
+  },
+  {
+    id: 3,
+    title: "Tech Talk",
+    genre: "Tech",
+    icon: "💻",
+    desc: "CS, Programming, AI",
+    difficulty: "Medium",
+    players: "3.1k",
+  },
+  {
+    id: 4,
+    title: "Mixed Madness",
+    genre: "Mixed",
+    icon: "🎲",
+    desc: "Everything, everywhere",
+    difficulty: "Mixed",
+    players: "4.2k",
+  },
 ];
 
 export default function Landing() {
@@ -31,7 +63,10 @@ export default function Landing() {
       return;
     }
     setError("");
-    navigate(`/waiting/${roomCode}?name=${encodeURIComponent(playerName)}`);
+    // ✅ Fixed: was using `name` instead of `playerName`
+    navigate(
+      `/waiting/${roomCode.trim()}?name=${encodeURIComponent(playerName.trim())}`,
+    );
   };
 
   return (
@@ -70,7 +105,7 @@ export default function Landing() {
         </section>
 
         {/* Main Grid */}
-        <div className="main-grid" style={s.mainGrid}>
+        <div style={s.mainGrid}>
           {/* Join Card */}
           <div style={s.joinCard}>
             <div style={s.joinHeader}>
@@ -172,7 +207,7 @@ export default function Landing() {
               <h2 style={s.staticTitle}>Try a Quiz</h2>
               <span style={s.noSignupTag}>No signup needed</span>
             </div>
-            <div className="quiz-grid" style={s.quizGrid}>
+            <div style={s.quizGrid}>
               {STATIC_QUIZZES.map((q) => (
                 <div
                   key={q.id}
@@ -201,7 +236,7 @@ export default function Landing() {
         </div>
 
         {/* Stats bar */}
-        <div className="stats-bar" style={s.statsBar}>
+        <div style={s.statsBar}>
           {[
             { label: "Questions", value: "500+" },
             { label: "Genres", value: "4" },
@@ -210,7 +245,6 @@ export default function Landing() {
           ].map((stat, i) => (
             <div
               key={i}
-              className="stat-item"
               style={{
                 ...s.statItem,
                 ...(i === 3 ? { borderRight: "none" } : {}),
@@ -260,8 +294,7 @@ const s = {
   grid: {
     position: "fixed",
     inset: 0,
-    backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
+    backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
     backgroundSize: "48px 48px",
     pointerEvents: "none",
   },
@@ -344,10 +377,6 @@ const s = {
     gap: "1.5rem",
     marginBottom: "2rem",
     alignItems: "start",
-    // add this:
-    "@media (max-width: 768px)": {
-      gridTemplateColumns: "1fr",
-    },
   },
   joinCard: {
     background: "#0f0f0f",
@@ -357,10 +386,10 @@ const s = {
     boxShadow: "0 0 40px rgba(245,166,35,0.03)",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between", 
+    justifyContent: "space-between",
     width: "100%",
     maxWidth: "420px",
-    minHeight: "342px", 
+    minHeight: "342px",
   },
   joinHeader: {
     display: "flex",

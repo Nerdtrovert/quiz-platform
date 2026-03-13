@@ -1,6 +1,6 @@
 const pool = require("../config/db");
 
-// ─── GET ALL QUIZZES FOR ADMIN (for Live Room selector) ───
+// ─── GET ALL QUIZZES FOR ADMIN (own + static presets) ────
 exports.getQuizzes = async (req, res) => {
   const admin_id = req.user.admin_id;
   try {
@@ -12,7 +12,17 @@ exports.getQuizzes = async (req, res) => {
        ORDER BY q.created_at DESC`,
       [admin_id],
     );
-    res.json({ quizzes });
+
+    // Also fetch static preset quizzes (admin_id=1, is_static=1)
+    const [staticQuizzes] = await pool.query(
+      `SELECT q.*,
+        (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
+       FROM Quizzes q
+       WHERE q.is_static = 1
+       ORDER BY q.quiz_id ASC`,
+    );
+
+    res.json({ quizzes, staticQuizzes });
   } catch (err) {
     console.error("GetQuizzes error:", err);
     res.status(500).json({ message: "Server error" });
@@ -77,8 +87,8 @@ exports.createQuiz = async (req, res) => {
       [
         admin_id,
         title,
-        genre || "mixed",
-        (difficulty || "mixed").toLowerCase(),
+        genre || "Mixed",
+        difficulty || "medium",
         question_ids.length,
         time_per_question || 30,
       ],
