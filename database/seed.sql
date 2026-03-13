@@ -1,122 +1,122 @@
 USE quiz_platform;
 
--- ============================================================
--- SEED DATA — Quiz Platform
--- ============================================================
-
 SET FOREIGN_KEY_CHECKS = 0;
 DELETE FROM Scores        WHERE score_id > 0;
 DELETE FROM Responses     WHERE response_id > 0;
 DELETE FROM Participants  WHERE participant_id > 0;
 DELETE FROM Rooms         WHERE room_id > 0;
 DELETE FROM StaticAttempts WHERE attempt_id > 0;
-DELETE FROM QuizQuestions WHERE quiz_id > 0;
+DELETE FROM QuizQuestions WHERE id > 0;
 DELETE FROM Quizzes       WHERE quiz_id > 0;
 DELETE FROM Options       WHERE option_id > 0;
 DELETE FROM QuestionBank  WHERE question_id > 0;
 DELETE FROM Admins        WHERE admin_id > 0;
+
+ALTER TABLE Admins         AUTO_INCREMENT = 1;
+ALTER TABLE QuestionBank   AUTO_INCREMENT = 1;
+ALTER TABLE Options        AUTO_INCREMENT = 1;
+ALTER TABLE Quizzes        AUTO_INCREMENT = 1;
+ALTER TABLE QuizQuestions  AUTO_INCREMENT = 1;
+ALTER TABLE StaticAttempts AUTO_INCREMENT = 1;
+ALTER TABLE Rooms          AUTO_INCREMENT = 1;
+ALTER TABLE Participants   AUTO_INCREMENT = 1;
+ALTER TABLE Responses      AUTO_INCREMENT = 1;
+ALTER TABLE Scores         AUTO_INCREMENT = 1;
 SET FOREIGN_KEY_CHECKS = 1;
 
--- ─── SYSTEM ADMIN ────────────────────────────────────────
+-- ------------------------------------------------------------
+-- SYSTEM ADMIN (admin_id=1, owns all seed questions)
+-- ------------------------------------------------------------
 INSERT INTO Admins (admin_id, name, email, password_hash) VALUES
 (1, 'System', 'admin@quizapp.com', '$2b$10$placeholder_not_for_login');
 
--- ─── QUESTION BANK ───────────────────────────────────────
-
--- Science Q1–20
-INSERT INTO QuestionBank (admin_id, question_text, genre, difficulty, base_points) VALUES
-(1,'What is the chemical symbol for Gold?','Science','easy',500),
-(1,'How many bones are in the adult human body?','Science','easy',500),
-(1,'What planet is known as the Red Planet?','Science','easy',500),
-(1,'What is the powerhouse of the cell?','Science','easy',500),
-(1,'What gas do plants absorb during photosynthesis?','Science','easy',500),
-(1,'What force keeps planets in orbit around the Sun?','Science','easy',500),
-(1,'How many planets are in our solar system?','Science','easy',500),
-(1,'What is the boiling point of water in Celsius?','Science','easy',500),
-(1,'What is the largest organ in the human body?','Science','easy',500),
-(1,'What is the chemical symbol for water?','Science','easy',500),
-(1,'What is the speed of light in vacuum (approx)?','Science','medium',750),
-(1,'What is the atomic number of Carbon?','Science','medium',750),
-(1,'Which scientist proposed the theory of general relativity?','Science','medium',750),
-(1,'What is the chemical formula for table salt?','Science','medium',750),
-(1,'Which organelle is responsible for protein synthesis?','Science','medium',750),
-(1,'What type of bond is formed when electrons are shared?','Science','medium',750),
-(1,'What is Newtons second law of motion?','Science','medium',750),
-(1,'What is the most abundant gas in Earths atmosphere?','Science','medium',750),
-(1,'What is the half-life of Carbon-14 (approx years)?','Science','hard',1000),
-(1,'What is the value of Avogadros number?','Science','hard',1000);
-
--- History Q21–40
-INSERT INTO QuestionBank (admin_id, question_text, genre, difficulty, base_points) VALUES
-(1,'In which year did World War II end?','History','easy',500),
-(1,'Who was the first President of the United States?','History','easy',500),
-(1,'In which year did India gain independence?','History','easy',500),
-(1,'What was the first artificial satellite sent to space?','History','easy',500),
-(1,'Which country did Napoleon Bonaparte come from?','History','easy',500),
-(1,'The Berlin Wall fell in which year?','History','easy',500),
-(1,'Who was the first man to walk on the Moon?','History','easy',500),
-(1,'In which country did the French Revolution begin?','History','easy',500),
-(1,'In which year did the Titanic sink?','History','easy',500),
-(1,'Who was the first female Prime Minister of the UK?','History','easy',500),
-(1,'Which ancient wonder was located in Alexandria?','History','medium',750),
-(1,'Who wrote the Declaration of Independence?','History','medium',750),
-(1,'In which year was the Magna Carta signed?','History','medium',750),
-(1,'Which empire was ruled by Genghis Khan?','History','medium',750),
-(1,'What was the name of the first nuclear bomb dropped in WWII?','History','medium',750),
-(1,'Who led the Cuban Revolution?','History','medium',750),
-(1,'In which city was the UN headquarters established in 1945?','History','medium',750),
-(1,'Which war was fought between the North and South of the USA?','History','medium',750),
-(1,'Who was the last Tsar of Russia?','History','hard',1000),
-(1,'What treaty ended World War I?','History','hard',1000);
-
--- Tech Q41–60
-INSERT INTO QuestionBank (admin_id, question_text, genre, difficulty, base_points) VALUES
-(1,'What does CPU stand for?','Tech','easy',500),
-(1,'What does HTML stand for?','Tech','easy',500),
-(1,'Which company created the Java programming language?','Tech','easy',500),
-(1,'What does RAM stand for?','Tech','easy',500),
-(1,'Which programming language is known as the language of the web?','Tech','easy',500),
-(1,'What does URL stand for?','Tech','easy',500),
-(1,'Who co-founded Apple with Steve Jobs?','Tech','easy',500),
-(1,'What does GPU stand for?','Tech','easy',500),
-(1,'What does DNS stand for?','Tech','easy',500),
-(1,'Which company developed the Android operating system?','Tech','easy',500),
-(1,'What is the binary representation of the decimal number 10?','Tech','medium',750),
-(1,'What does SQL stand for?','Tech','medium',750),
-(1,'Which data structure uses LIFO order?','Tech','medium',750),
-(1,'What is the time complexity of binary search?','Tech','medium',750),
-(1,'What does API stand for?','Tech','medium',750),
-(1,'Which protocol is used to send emails?','Tech','medium',750),
-(1,'What is a deadlock in operating systems?','Tech','medium',750),
-(1,'What does REST stand for in web development?','Tech','medium',750),
-(1,'What is the difference between TCP and UDP?','Tech','hard',1000),
-(1,'What is the CAP theorem in distributed systems?','Tech','hard',1000);
-
--- Mixed Q61–80
-INSERT INTO QuestionBank (admin_id, question_text, genre, difficulty, base_points) VALUES
-(1,'How many continents are there on Earth?','Mixed','easy',500),
-(1,'What is the capital of Japan?','Mixed','easy',500),
-(1,'How many sides does a hexagon have?','Mixed','easy',500),
-(1,'What is the largest ocean on Earth?','Mixed','easy',500),
-(1,'Who painted the Mona Lisa?','Mixed','easy',500),
-(1,'What is the fastest land animal?','Mixed','easy',500),
-(1,'How many strings does a standard guitar have?','Mixed','easy',500),
-(1,'What is the square root of 144?','Mixed','easy',500),
-(1,'Which planet is closest to the Sun?','Mixed','easy',500),
-(1,'What language has the most native speakers in the world?','Mixed','easy',500),
-(1,'What is the currency of Japan?','Mixed','medium',750),
-(1,'In which sport would you perform a slam dunk?','Mixed','medium',750),
-(1,'What is the longest river in the world?','Mixed','medium',750),
-(1,'Who wrote the play Romeo and Juliet?','Mixed','medium',750),
-(1,'What is the chemical symbol for Iron?','Mixed','medium',750),
-(1,'How many players are on a standard soccer team?','Mixed','medium',750),
-(1,'What is the smallest country in the world by area?','Mixed','medium',750),
-(1,'Which element has the highest melting point?','Mixed','medium',750),
-(1,'What is the Golden Ratio (approx)?','Mixed','hard',1000),
-(1,'Which mathematician proved Fermats Last Theorem in 1995?','Mixed','hard',1000);
+-- ------------------------------------------------------------
+-- QUESTION BANK (explicit question_id to match Options FK)
+-- ------------------------------------------------------------
+INSERT INTO QuestionBank (question_id, admin_id, question_text, genre, difficulty, base_points) VALUES
+(1, 1, 'What is the chemical symbol for Gold?', 'Science', 'easy', 500),
+(2, 1, 'How many bones are in the adult human body?', 'Science', 'easy', 500),
+(3, 1, 'What planet is known as the Red Planet?', 'Science', 'easy', 500),
+(4, 1, 'What is the powerhouse of the cell?', 'Science', 'easy', 500),
+(5, 1, 'What gas do plants absorb during photosynthesis?', 'Science', 'easy', 500),
+(6, 1, 'What force keeps planets in orbit around the Sun?', 'Science', 'easy', 500),
+(7, 1, 'How many planets are in our solar system?', 'Science', 'easy', 500),
+(8, 1, 'What is the boiling point of water in Celsius?', 'Science', 'easy', 500),
+(9, 1, 'What is the largest organ in the human body?', 'Science', 'easy', 500),
+(10, 1, 'What is the chemical symbol for water?', 'Science', 'easy', 500),
+(11, 1, 'What is the speed of light in vacuum (approx)?', 'Science', 'medium', 750),
+(12, 1, 'What is the atomic number of Carbon?', 'Science', 'medium', 750),
+(13, 1, 'Which scientist proposed the theory of general relativity?', 'Science', 'medium', 750),
+(14, 1, 'What is the chemical formula for table salt?', 'Science', 'medium', 750),
+(15, 1, 'Which organelle is responsible for protein synthesis?', 'Science', 'medium', 750),
+(16, 1, 'What type of bond is formed when electrons are shared?', 'Science', 'medium', 750),
+(17, 1, 'What is Newtons second law of motion?', 'Science', 'medium', 750),
+(18, 1, 'What is the most abundant gas in Earths atmosphere?', 'Science', 'medium', 750),
+(19, 1, 'What is the half-life of Carbon-14 (approx years)?', 'Science', 'hard', 1000),
+(20, 1, 'What is the value of Avogadros number?', 'Science', 'hard', 1000),
+(21, 1, 'In which year did World War II end?', 'History', 'easy', 500),
+(22, 1, 'Who was the first President of the United States?', 'History', 'easy', 500),
+(23, 1, 'In which year did India gain independence?', 'History', 'easy', 500),
+(24, 1, 'What was the first artificial satellite sent to space?', 'History', 'easy', 500),
+(25, 1, 'Which country did Napoleon Bonaparte come from?', 'History', 'easy', 500),
+(26, 1, 'The Berlin Wall fell in which year?', 'History', 'easy', 500),
+(27, 1, 'Who was the first man to walk on the Moon?', 'History', 'easy', 500),
+(28, 1, 'In which country did the French Revolution begin?', 'History', 'easy', 500),
+(29, 1, 'In which year did the Titanic sink?', 'History', 'easy', 500),
+(30, 1, 'Who was the first female Prime Minister of the UK?', 'History', 'easy', 500),
+(31, 1, 'Which ancient wonder was located in Alexandria?', 'History', 'medium', 750),
+(32, 1, 'Who wrote the Declaration of Independence?', 'History', 'medium', 750),
+(33, 1, 'In which year was the Magna Carta signed?', 'History', 'medium', 750),
+(34, 1, 'Which empire was ruled by Genghis Khan?', 'History', 'medium', 750),
+(35, 1, 'What was the name of the first nuclear bomb dropped in WWII?', 'History', 'medium', 750),
+(36, 1, 'Who led the Cuban Revolution?', 'History', 'medium', 750),
+(37, 1, 'In which city was the UN headquarters established in 1945?', 'History', 'medium', 750),
+(38, 1, 'Which war was fought between the North and South of the USA?', 'History', 'medium', 750),
+(39, 1, 'Who was the last Tsar of Russia?', 'History', 'hard', 1000),
+(40, 1, 'What treaty ended World War I?', 'History', 'hard', 1000),
+(41, 1, 'What does CPU stand for?', 'Tech', 'easy', 500),
+(42, 1, 'What does HTML stand for?', 'Tech', 'easy', 500),
+(43, 1, 'Which company created the Java programming language?', 'Tech', 'easy', 500),
+(44, 1, 'What does RAM stand for?', 'Tech', 'easy', 500),
+(45, 1, 'Which programming language is known as the language of the web?', 'Tech', 'easy', 500),
+(46, 1, 'What does URL stand for?', 'Tech', 'easy', 500),
+(47, 1, 'Who co-founded Apple with Steve Jobs?', 'Tech', 'easy', 500),
+(48, 1, 'What does GPU stand for?', 'Tech', 'easy', 500),
+(49, 1, 'What does DNS stand for?', 'Tech', 'easy', 500),
+(50, 1, 'Which company developed the Android operating system?', 'Tech', 'easy', 500),
+(51, 1, 'What is the binary representation of the decimal number 10?', 'Tech', 'medium', 750),
+(52, 1, 'What does SQL stand for?', 'Tech', 'medium', 750),
+(53, 1, 'Which data structure uses LIFO order?', 'Tech', 'medium', 750),
+(54, 1, 'What is the time complexity of binary search?', 'Tech', 'medium', 750),
+(55, 1, 'What does API stand for?', 'Tech', 'medium', 750),
+(56, 1, 'Which protocol is used to send emails?', 'Tech', 'medium', 750),
+(57, 1, 'What is a deadlock in operating systems?', 'Tech', 'medium', 750),
+(58, 1, 'What does REST stand for in web development?', 'Tech', 'medium', 750),
+(59, 1, 'What is the difference between TCP and UDP?', 'Tech', 'hard', 1000),
+(60, 1, 'What is the CAP theorem in distributed systems?', 'Tech', 'hard', 1000),
+(61, 1, 'How many continents are there on Earth?', 'Mixed', 'easy', 500),
+(62, 1, 'What is the capital of Japan?', 'Mixed', 'easy', 500),
+(63, 1, 'How many sides does a hexagon have?', 'Mixed', 'easy', 500),
+(64, 1, 'What is the largest ocean on Earth?', 'Mixed', 'easy', 500),
+(65, 1, 'Who painted the Mona Lisa?', 'Mixed', 'easy', 500),
+(66, 1, 'What is the fastest land animal?', 'Mixed', 'easy', 500),
+(67, 1, 'How many strings does a standard guitar have?', 'Mixed', 'easy', 500),
+(68, 1, 'What is the square root of 144?', 'Mixed', 'easy', 500),
+(69, 1, 'Which planet is closest to the Sun?', 'Mixed', 'easy', 500),
+(70, 1, 'What language has the most native speakers in the world?', 'Mixed', 'easy', 500),
+(71, 1, 'What is the currency of Japan?', 'Mixed', 'medium', 750),
+(72, 1, 'In which sport would you perform a slam dunk?', 'Mixed', 'medium', 750),
+(73, 1, 'What is the longest river in the world?', 'Mixed', 'medium', 750),
+(74, 1, 'Who wrote the play Romeo and Juliet?', 'Mixed', 'medium', 750),
+(75, 1, 'What is the chemical symbol for Iron?', 'Mixed', 'medium', 750),
+(76, 1, 'How many players are on a standard soccer team?', 'Mixed', 'medium', 750),
+(77, 1, 'What is the smallest country in the world by area?', 'Mixed', 'medium', 750),
+(78, 1, 'Which element has the highest melting point?', 'Mixed', 'medium', 750),
+(79, 1, 'What is the Golden Ratio (approx)?', 'Mixed', 'hard', 1000),
+(80, 1, 'Which mathematician proved Fermats Last Theorem in 1995?', 'Mixed', 'hard', 1000);
 
 -- ------------------------------------------------------------
--- OPTIONS (correct answer at random position)
+-- OPTIONS (correct answer at random position A/B/C/D)
 -- ------------------------------------------------------------
 INSERT INTO Options (question_id, option_number, option_text, is_correct) VALUES
 (1, 1, 'Gd', 0),
@@ -439,7 +439,6 @@ INSERT INTO Options (question_id, option_number, option_text, is_correct) VALUES
 (80, 2, 'Andrew Wiles', 1),
 (80, 3, 'Terence Tao', 0),
 (80, 4, 'Grigori Perelman', 0);
-
 
 -- ------------------------------------------------------------
 -- STATIC QUIZZES
