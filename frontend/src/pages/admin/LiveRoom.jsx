@@ -10,28 +10,18 @@ function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
-function getStoredHostRoom(adminId) {
-  try {
-    const raw = localStorage.getItem(`host_room_${adminId}`);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
 export default function LiveRoom() {
   const navigate = useNavigate();
   const admin = JSON.parse(localStorage.getItem("admin") || "{}");
   const socketRef = useRef(null);
-  const storedRoom = getStoredHostRoom(admin.admin_id);
 
   // Setup
   const [quizzes, setQuizzes] = useState([]);
   const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
-  const [roomCode, setRoomCode] = useState(
-    () => storedRoom?.room_code || generateRoomCode(),
-  );
+  const selectedQuizRef = useRef(null); // persists across status changes
+  const [roomCode] = useState(generateRoomCode);
+  const [roomCreated, setRoomCreated] = useState(false);
 
   // Room state
   const [participants, setParticipants] = useState([]);
@@ -52,93 +42,42 @@ export default function LiveRoom() {
   const timerRef = useRef(null);
 
   useEffect(() => {
-    if (admin.is_master) {
-      navigate("/admin/master");
-      return undefined;
-    }
-
     fetchQuizzes();
-    if (storedRoom?.room_code) {
-      connectAsHost(storedRoom.room_code, true);
-    }
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [admin.is_master, navigate]);
+  }, []);
 
   const fetchQuizzes = async () => {
     try {
       const res = await api.get("/quizzes");
-      const ownQuizzes = res.data.quizzes || [];
-      const presetQuizzes = res.data.staticQuizzes || [];
-      setQuizzes(ownQuizzes);
-      setStaticQuizzes(presetQuizzes);
-
-      if (storedRoom?.quiz_id) {
-        const matched = [...presetQuizzes, ...ownQuizzes].find(
-          (quiz) => quiz.quiz_id === storedRoom.quiz_id,
-        );
-        if (matched) setSelectedQuiz(matched);
-      }
+      setQuizzes(res.data.quizzes || []);
+      setStaticQuizzes(res.data.staticQuizzes || []);
     } catch {}
   };
 
-  const connectAsHost = (nextRoomCode, recoverOnly = false) => {
-    const socket = io(SOCKET_URL, {
-      auth: {
-        token: localStorage.getItem("token"),
-      },
-    });
+  const handleCreateRoom = () => {
+    if (!selectedQuiz) return;
+
+    const socket = io(SOCKET_URL);
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      if (recoverOnly) {
-        socket.emit("admin-room-sync", {
-          room_code: nextRoomCode,
-        });
-        return;
-      }
-
       socket.emit("create-room", {
         quiz_id: selectedQuiz.quiz_id,
         admin_id: admin.admin_id,
-        room_code: nextRoomCode,
+        room_code: roomCode,
         time_per_question: selectedQuiz.time_per_question || 30,
       });
     });
 
     socket.on("room-created", () => {
-      localStorage.setItem(
-        `host_room_${admin.admin_id}`,
-        JSON.stringify({
-          room_code: nextRoomCode,
-          quiz_id: selectedQuiz.quiz_id,
-        }),
-      );
+      setRoomCreated(true);
       setStatus("waiting");
     });
 
-    socket.on("room-synced", (payload) => {
-      setRoomCode(payload.room_code);
-      setParticipants(payload.participants || []);
-      setLeaderboard(payload.leaderboard || []);
-      setQuestionIndex(payload.current_question_index || 0);
-      setTotalQuestions(payload.total_questions || 0);
-      setPaused(Boolean(payload.paused));
-
-      if (payload.current_question) {
-        setCurrentQuestion(payload.current_question);
-        setTimeLeft(payload.current_question.time_per_question || 0);
-      }
-
-      if (payload.status === "waiting") setStatus("waiting");
-      else if (payload.status === "active" || payload.status === "paused")
-        setStatus("active");
-      else setStatus(payload.status || "setup");
-    });
-
-    socket.on("participant-joined", ({ participants }) => {
+    socket.on("participant-joined", ({ participants, count }) => {
       setParticipants(participants || []);
     });
 
@@ -184,27 +123,26 @@ export default function LiveRoom() {
     });
 
     socket.on("quiz-end", ({ leaderboard }) => {
-      setLeaderboard(leaderboard || []);
+      const safeLeaderboard = leaderboard || [];
+      setLeaderboard(safeLeaderboard);
       setStatus("ended");
-      localStorage.removeItem(`host_room_${admin.admin_id}`);
       if (timerRef.current) clearInterval(timerRef.current);
+      navigate(`/leaderboard/${roomCode}`, {
+        replace: true,
+        state: {
+          leaderboard: safeLeaderboard,
+          roomCode,
+          isHost: true,
+          quizTitle:
+            selectedQuiz?.title || selectedQuizRef.current?.title || "Live Quiz",
+        },
+      });
     });
 
     socket.on("quiz-paused", () => setPaused(true));
     socket.on("quiz-resumed", () => setPaused(false));
 
-    socket.on("error", ({ message }) => {
-      if (recoverOnly) {
-        localStorage.removeItem(`host_room_${admin.admin_id}`);
-        setStatus("setup");
-      }
-      alert(message);
-    });
-  };
-
-  const handleCreateRoom = () => {
-    if (!selectedQuiz) return;
-    connectAsHost(roomCode, false);
+    socket.on("error", ({ message }) => alert(message));
   };
 
   const handleStartQuiz = () => {
@@ -223,10 +161,6 @@ export default function LiveRoom() {
     } else {
       socketRef.current?.emit("pause-quiz", { room_code: roomCode });
     }
-  };
-
-  const handleEndQuiz = () => {
-    socketRef.current?.emit("end-quiz", { room_code: roomCode, forced: true });
   };
 
   const handleKick = (participant_id) => {
@@ -327,7 +261,10 @@ export default function LiveRoom() {
                           ? s.quizOptionSelected
                           : {}),
                       }}
-                      onClick={() => setSelectedQuiz(q)}
+                      onClick={() => {
+                        setSelectedQuiz(q);
+                        selectedQuizRef.current = q;
+                      }}
                     >
                       <div style={s.quizOptionLeft}>
                         <span style={s.quizOptionTitle}>{q.title}</span>
@@ -365,7 +302,10 @@ export default function LiveRoom() {
                             ? s.quizOptionSelected
                             : {}),
                         }}
-                        onClick={() => setSelectedQuiz(q)}
+                        onClick={() => {
+                          setSelectedQuiz(q);
+                          selectedQuizRef.current = q;
+                        }}
                       >
                         <div style={s.quizOptionLeft}>
                           <span style={s.quizOptionTitle}>{q.title}</span>
@@ -407,23 +347,18 @@ export default function LiveRoom() {
                 <h1 style={s.title}>Waiting for participants</h1>
                 <p style={s.subtitle}>{selectedQuiz?.title}</p>
               </div>
-              <div style={s.waitingActions}>
-                <button style={s.endBtnGhost} onClick={handleEndQuiz}>
-                  End Room
-                </button>
-                <button
-                  style={{
-                    ...s.startBtn,
-                    ...(participants.length === 0
-                      ? { opacity: 0.4, cursor: "not-allowed" }
-                      : {}),
-                  }}
-                  onClick={handleStartQuiz}
-                  disabled={participants.length === 0}
-                >
-                  ⚡ Start Quiz ({participants.length})
-                </button>
-              </div>
+              <button
+                style={{
+                  ...s.startBtn,
+                  ...(participants.length === 0
+                    ? { opacity: 0.4, cursor: "not-allowed" }
+                    : {}),
+                }}
+                onClick={handleStartQuiz}
+                disabled={participants.length === 0}
+              >
+                ⚡ Start Quiz ({participants.length})
+              </button>
             </div>
 
             <div style={s.roomCodeDisplay}>
@@ -473,9 +408,6 @@ export default function LiveRoom() {
                 <div style={s.liveControls}>
                   <button style={s.pauseBtn} onClick={handlePauseResume}>
                     {paused ? "▶ Resume" : "⏸ Pause"}
-                  </button>
-                  <button style={s.endBtnGhost} onClick={handleEndQuiz}>
-                    End Quiz
                   </button>
                 </div>
               </div>
@@ -585,7 +517,8 @@ export default function LiveRoom() {
           <div style={s.endedContainer}>
             <h1 style={s.title}>Quiz Complete! 🎉</h1>
             <p style={s.subtitle}>
-              Final leaderboard for {selectedQuiz?.title}
+              Final leaderboard for{" "}
+              {selectedQuiz?.title || selectedQuizRef.current?.title}
             </p>
             <div style={s.lbCard}>
               {leaderboard.map((entry, i) => (
@@ -808,11 +741,6 @@ const s = {
     justifyContent: "space-between",
     marginBottom: "1.5rem",
   },
-  waitingActions: {
-    display: "flex",
-    gap: "0.7rem",
-    alignItems: "center",
-  },
   startBtn: {
     background: "linear-gradient(135deg, #f5a623, #e8940f)",
     border: "none",
@@ -938,16 +866,6 @@ const s = {
     background: "transparent",
     border: "1px solid #333",
     color: "#888",
-    padding: "0.4rem 0.9rem",
-    borderRadius: "6px",
-    fontSize: "0.75rem",
-    fontWeight: "700",
-    cursor: "pointer",
-  },
-  endBtnGhost: {
-    background: "transparent",
-    border: "1px solid rgba(239,68,68,0.35)",
-    color: "#f87171",
     padding: "0.4rem 0.9rem",
     borderRadius: "6px",
     fontSize: "0.75rem",

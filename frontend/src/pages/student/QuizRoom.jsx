@@ -88,10 +88,23 @@ export default function QuizRoom() {
     socket.on("quiz-resumed", () => setPaused(false));
 
     socket.on("quiz-end", ({ leaderboard }) => {
+      const safeLeaderboard = leaderboard || [];
+      const finalScore = score;
       setStatus("ended");
-      setFinalLeaderboard(leaderboard || []);
+      setFinalLeaderboard(safeLeaderboard);
       setCurrentQuestion(null);
       sessionStorage.clear();
+      navigate(`/leaderboard/${roomCode}`, {
+        replace: true,
+        state: {
+          leaderboard: safeLeaderboard,
+          roomCode,
+          playerName,
+          score: finalScore,
+          isHost: false,
+          quizTitle: "Live Quiz",
+        },
+      });
     });
 
     socket.on("kicked", () => {
@@ -99,8 +112,22 @@ export default function QuizRoom() {
       socket.disconnect();
     });
 
-    socket.on("error", () => setStatus("error"));
-    socket.on("connect_error", () => setStatus("error"));
+    socket.on("error", (err) => {
+      // Don't overwrite ended/kicked status
+      setStatus((prev) =>
+        prev === "ended" || prev === "kicked" ? prev : "error",
+      );
+    });
+    socket.on("connect_error", () => {
+      setStatus((prev) =>
+        prev === "ended" || prev === "kicked" ? prev : "error",
+      );
+    });
+    socket.on("disconnect", () => {
+      setStatus((prev) =>
+        prev === "ended" || prev === "kicked" ? prev : "error",
+      );
+    });
 
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
