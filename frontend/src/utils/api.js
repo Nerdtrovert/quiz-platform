@@ -1,8 +1,10 @@
 import axios from "axios";
-console.log("API baseURL:", "http://localhost:5000/api");
+import { API_BASE_URL } from "./runtime";
+
+console.log("API baseURL:", API_BASE_URL);
 
 const api = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: API_BASE_URL,
 });
 
 // Attach JWT token to every request automatically

@@ -2,9 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import api from "../../utils/api";
-
-const SOCKET_URL =
-  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+import { SOCKET_URL } from "../../utils/runtime";
 
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
