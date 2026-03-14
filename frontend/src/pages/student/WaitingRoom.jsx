@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
-
-const SOCKET_URL =
-  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+import { SOCKET_URL } from "../../utils/runtime";
 
 export default function WaitingRoom() {
   const { roomCode } = useParams();

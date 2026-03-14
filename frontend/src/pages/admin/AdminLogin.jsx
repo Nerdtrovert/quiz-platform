@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import api from "../../utils/api"; 
 import useViewport from "../../hooks/useViewport";
 
@@ -53,7 +53,7 @@ export default function AdminLogin() {
       <div style={s.container}>
 
         {/* Back link */}
-        <a href="/" style={s.backLink}>← Back to home</a>
+        <Link to="/" style={s.backLink}>← Back to home</Link>
 
         {/* Card */}
         <div
@@ -185,7 +185,7 @@ export default function AdminLogin() {
 
             <p style={s.footerNote}>
               Admin access only. Students join via room code on the{" "}
-              <a href="/" style={s.homeLink}>home page</a>.
+              <Link to="/" style={s.homeLink}>home page</Link>.
             </p>
             <p style={s.secretNote}>Internal ops access uses the same sign-in form.</p>
           </div>

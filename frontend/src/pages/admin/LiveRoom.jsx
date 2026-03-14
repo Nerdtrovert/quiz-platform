@@ -1,10 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import api from "../../utils/api";
-
-const SOCKET_URL =
-  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+import { SOCKET_URL } from "../../utils/runtime";
 
 function generateRoomCode() {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -287,9 +285,9 @@ export default function LiveRoom() {
                 {quizzes.length === 0 ? (
                   <p style={s.emptyNote}>
                     No quizzes yet.{" "}
-                    <a href="/admin/create-quiz" style={{ color: "#f5a623" }}>
+                    <Link to="/admin/create-quiz" style={{ color: "#f5a623" }}>
                       Create one →
-                    </a>
+                    </Link>
                   </p>
                 ) : (
                   <div style={s.quizList}>

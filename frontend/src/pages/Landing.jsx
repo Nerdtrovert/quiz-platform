@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import useViewport from "../hooks/useViewport";
 
 const STATIC_QUIZZES = [
@@ -97,9 +97,9 @@ export default function Landing() {
             <div style={s.logoDot} />
             <span style={s.logoText}>QURIO</span>
           </div>
-          <a href="/admin/login" style={s.hostLink}>
+          <Link to="/admin/login" style={s.hostLink}>
             Host a Quiz →
-          </a>
+          </Link>
         </header>
 
         {/* Hero */}

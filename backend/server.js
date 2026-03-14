@@ -14,7 +14,13 @@ const io = new Server(server, {
   },
 });
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "*",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization", "x-tunnel-authorization"],
+  }),
+);
 app.use(express.json());
 
 // ── Routes ────────────────────────────────────────────────
