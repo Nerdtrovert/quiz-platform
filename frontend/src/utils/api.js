@@ -1,8 +1,8 @@
 import axios from "axios";
-import { API_BASE_URL, buildAppPath } from "./runtime";
+console.log("API baseURL:", "http://localhost:5000/api");
 
 const api = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: "http://localhost:5000/api",
 });
 
 // Attach JWT token to every request automatically
@@ -19,7 +19,7 @@ api.interceptors.response.use(
     if (err.response?.status === 401) {
       localStorage.removeItem("token");
       localStorage.removeItem("admin");
-      window.location.assign(buildAppPath("/admin/login"));
+      window.location.href = "/admin/login";
     }
     return Promise.reject(err);
   },

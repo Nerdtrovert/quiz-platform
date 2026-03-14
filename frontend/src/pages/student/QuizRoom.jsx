@@ -2,7 +2,9 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import useViewport from "../../hooks/useViewport";
-import { SOCKET_URL } from "../../utils/runtime";
+
+const SOCKET_URL =
+  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
 
 export default function QuizRoom() {
   const { roomCode } = useParams();
