@@ -60,7 +60,7 @@ export default function AdminLogin() {
           <div style={s.leftPanel}>
             <div style={s.logo}>
               <div style={s.logoDot} />
-              <span style={s.logoText}>QUIZLIVE</span>
+              <span style={s.logoText}>QURIO</span>
             </div>
             <h1 style={s.panelTitle}>
               Host smarter.<br />

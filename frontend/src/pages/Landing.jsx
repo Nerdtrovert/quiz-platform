@@ -80,7 +80,7 @@ export default function Landing() {
         <header style={s.header}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
           <a href="/admin/login" style={s.hostLink}>
             Host a Quiz →

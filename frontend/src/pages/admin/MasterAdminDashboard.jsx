@@ -75,7 +75,7 @@ export default function MasterAdminDashboard() {
           <div style={s.logoRow}>
             <div style={s.logoDot} />
             <div>
-              <div style={s.logoText}>QUIZLIVE OPS</div>
+              <div style={s.logoText}>QURIO OPS</div>
               <div style={s.logoSub}>master console</div>
             </div>
           </div>

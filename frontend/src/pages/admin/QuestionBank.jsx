@@ -110,7 +110,7 @@ export default function QuestionBank() {
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
           <nav style={s.nav}>
             {[

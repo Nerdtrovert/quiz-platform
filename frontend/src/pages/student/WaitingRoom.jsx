@@ -129,7 +129,7 @@ export default function WaitingRoom() {
         <div style={s.card}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
 
           <div style={s.roomBadge}>{roomCode}</div>

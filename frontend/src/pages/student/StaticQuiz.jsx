@@ -186,7 +186,7 @@ export default function StaticQuiz() {
           <div style={s.nameCard}>
             <div style={s.nameLogo}>
               <div style={s.logoDot} />
-              <span style={s.logoText}>QUIZLIVE</span>
+              <span style={s.logoText}>QURIO</span>
             </div>
             <div style={s.quizBadge}>
               {quiz?.genre} · {quiz?.difficulty}
@@ -242,7 +242,7 @@ export default function StaticQuiz() {
         <div style={s.topBar}>
           <div style={s.topLeft}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
           <div style={s.progress}>
             {questions.map((_, i) => (

@@ -189,7 +189,7 @@ export default function LiveRoom() {
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
           <nav style={s.nav}>
             {[
@@ -364,7 +364,7 @@ export default function LiveRoom() {
             <div style={s.roomCodeDisplay}>
               <span style={s.roomCodeLabel}>ROOM CODE</span>
               <span style={s.roomCodeValue}>{roomCode}</span>
-              <span style={s.roomCodeHint2}>Share at quizlive.com</span>
+              <span style={s.roomCodeHint2}>Share on Qurio</span>
             </div>
 
             <div style={s.participantGrid}>

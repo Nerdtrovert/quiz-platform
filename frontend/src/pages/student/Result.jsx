@@ -54,7 +54,7 @@ export default function Result() {
         <div style={s.header}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
           <button style={s.homeBtn} onClick={() => navigate("/")}>
             ← Home

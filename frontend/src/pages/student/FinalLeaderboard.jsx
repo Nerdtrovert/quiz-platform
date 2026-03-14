@@ -23,7 +23,7 @@ export default function FinalLeaderboard() {
           <div style={s.card}>
             <div style={s.logo}>
               <div style={s.logoDot} />
-              <span style={s.logoText}>QUIZLIVE</span>
+              <span style={s.logoText}>QURIO</span>
             </div>
             <h1 style={s.title}>Leaderboard unavailable</h1>
             <p style={s.subtitle}>
@@ -49,7 +49,7 @@ export default function FinalLeaderboard() {
         <div style={s.card}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>QURIO</span>
           </div>
 
           <div style={s.roomBadge}>{roomCode}</div>
