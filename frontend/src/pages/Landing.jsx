@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import useViewport from "../hooks/useViewport";
 
 const STATIC_QUIZZES = [
   {
@@ -42,6 +43,7 @@ const STATIC_QUIZZES = [
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { isMobile, isTablet } = useViewport();
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [step, setStep] = useState("code");
@@ -75,9 +77,22 @@ export default function Landing() {
       <div style={s.blob2} />
       <div style={s.grid} />
 
-      <div style={s.container}>
+      <div
+        style={{
+          ...s.container,
+          padding: isMobile ? "0 1rem 4rem" : "0 2rem 4rem",
+        }}
+      >
         {/* Header */}
-        <header style={s.header}>
+        <header
+          style={{
+            ...s.header,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "1rem" : 0,
+            marginBottom: isMobile ? "2rem" : "3rem",
+          }}
+        >
           <div style={s.logo}>
             <div style={s.logoDot} />
             <span style={s.logoText}>QURIO</span>
@@ -88,7 +103,7 @@ export default function Landing() {
         </header>
 
         {/* Hero */}
-        <section style={s.hero}>
+        <section style={{ ...s.hero, marginBottom: isMobile ? "2rem" : "3rem" }}>
           <div style={s.heroBadge}>
             <span style={s.badgeDot} />
             Live &amp; Static Quizzes
@@ -98,16 +113,29 @@ export default function Landing() {
             <br />
             <span style={s.heroAccent}>Beat the clock.</span>
           </h1>
-          <p style={s.heroSub}>
+          <p style={{ ...s.heroSub, fontSize: isMobile ? "0.88rem" : "0.95rem" }}>
             Join a live quiz with a room code, or try one of our curated quizzes
             anytime — no signup needed.
           </p>
         </section>
 
         {/* Main Grid */}
-        <div style={s.mainGrid}>
+        <div
+          style={{
+            ...s.mainGrid,
+            gridTemplateColumns: isTablet ? "1fr" : "420px 1fr",
+            gap: isMobile ? "1rem" : "1.5rem",
+          }}
+        >
           {/* Join Card */}
-          <div style={s.joinCard}>
+          <div
+            style={{
+              ...s.joinCard,
+              maxWidth: isTablet ? "100%" : "420px",
+              minHeight: isMobile ? "auto" : "342px",
+              padding: isMobile ? "1.25rem" : "1.8rem",
+            }}
+          >
             <div style={s.joinHeader}>
               <div style={s.joinIcon}>⚡</div>
               <div>
@@ -203,11 +231,22 @@ export default function Landing() {
 
           {/* Static Quizzes */}
           <div style={s.staticSection}>
-            <div style={s.staticHeader}>
+            <div
+              style={{
+                ...s.staticHeader,
+                flexDirection: isMobile ? "column" : "row",
+                alignItems: isMobile ? "flex-start" : "center",
+              }}
+            >
               <h2 style={s.staticTitle}>Try a Quiz</h2>
               <span style={s.noSignupTag}>No signup needed</span>
             </div>
-            <div style={s.quizGrid}>
+            <div
+              style={{
+                ...s.quizGrid,
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              }}
+            >
               {STATIC_QUIZZES.map((q) => (
                 <div
                   key={q.id}
@@ -236,7 +275,15 @@ export default function Landing() {
         </div>
 
         {/* Stats bar */}
-        <div style={s.statsBar}>
+        <div
+          style={{
+            ...s.statsBar,
+            display: isMobile ? "grid" : "flex",
+            gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+            padding: isMobile ? "1rem" : "1.2rem 2rem",
+            gap: isMobile ? "0.75rem" : 0,
+          }}
+        >
           {[
             { label: "Questions", value: "500+" },
             { label: "Genres", value: "4" },
@@ -247,7 +294,11 @@ export default function Landing() {
               key={i}
               style={{
                 ...s.statItem,
-                ...(i === 3 ? { borderRight: "none" } : {}),
+                ...(isMobile
+                  ? { borderRight: "none", padding: "0.75rem 0.5rem" }
+                  : i === 3
+                    ? { borderRight: "none" }
+                    : {}),
               }}
             >
               <span style={s.statVal}>{stat.value}</span>

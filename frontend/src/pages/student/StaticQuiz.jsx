@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 import useAntiCheat from "../../hooks/useAntiCheat";
+import useViewport from "../../hooks/useViewport";
 
 export default function StaticQuiz() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
 
   // Quiz data
   const [quiz, setQuiz] = useState(null);
@@ -182,8 +184,13 @@ export default function StaticQuiz() {
         <div style={s.blob1} />
         <div style={s.blob2} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.nameCard}>
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : 0 }}>
+          <div
+            style={{
+              ...s.nameCard,
+              padding: isMobile ? "1.5rem" : "2.5rem",
+            }}
+          >
             <div style={s.nameLogo}>
               <div style={s.logoDot} />
               <span style={s.logoText}>QURIO</span>
@@ -237,9 +244,21 @@ export default function StaticQuiz() {
       <div style={s.blob2} />
       <div style={s.grid} />
 
-      <div style={s.quizContainer}>
+      <div
+        style={{
+          ...s.quizContainer,
+          padding: isMobile ? "1rem" : "1.5rem 2rem",
+        }}
+      >
         {/* Top bar */}
-        <div style={s.topBar}>
+        <div
+          style={{
+            ...s.topBar,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "0.75rem" : 0,
+          }}
+        >
           <div style={s.topLeft}>
             <div style={s.logoDot} />
             <span style={s.logoText}>QURIO</span>
@@ -277,7 +296,14 @@ export default function StaticQuiz() {
         </div>
 
         {/* Timer + player */}
-        <div style={s.timerRow}>
+        <div
+          style={{
+            ...s.timerRow,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "0.6rem" : 0,
+          }}
+        >
           <span style={s.playerTag}>👤 {playerName}</span>
           <div
             style={{
@@ -291,8 +317,8 @@ export default function StaticQuiz() {
         </div>
 
         {/* Question */}
-        <div style={s.questionCard}>
-          <div style={s.questionMeta}>
+        <div style={{ ...s.questionCard, padding: isMobile ? "1.1rem" : "1.5rem" }}>
+          <div style={{ ...s.questionMeta, flexWrap: "wrap" }}>
             <span style={s.genreTag}>{currentQ.genre}</span>
             <span style={s.pointsTag}>{currentQ.base_points} pts</span>
           </div>
@@ -316,7 +342,12 @@ export default function StaticQuiz() {
           </div>
         )}
         {/* Options */}
-        <div style={s.optionsGrid}>
+        <div
+          style={{
+            ...s.optionsGrid,
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          }}
+        >
           {options.map((opt) => (
             <button
               key={opt.option_number}
@@ -342,7 +373,13 @@ export default function StaticQuiz() {
 
         {/* Feedback + Next */}
         {revealed && (
-          <div style={s.feedbackRow}>
+          <div
+            style={{
+              ...s.feedbackRow,
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "stretch" : "center",
+            }}
+          >
             <div
               style={{
                 ...s.feedbackBadge,
@@ -360,7 +397,11 @@ export default function StaticQuiz() {
                   : "✗ Wrong"}
             </div>
             <button
-              style={{ ...s.nextBtn, ...(submitting ? { opacity: 0.6 } : {}) }}
+              style={{
+                ...s.nextBtn,
+                ...(isMobile ? { width: "100%", marginLeft: 0 } : {}),
+                ...(submitting ? { opacity: 0.6 } : {}),
+              }}
               onClick={handleNext}
               disabled={submitting}
             >

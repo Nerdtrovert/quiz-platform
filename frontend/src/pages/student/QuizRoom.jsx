@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
+import useViewport from "../../hooks/useViewport";
 
 const SOCKET_URL =
   import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
@@ -9,6 +10,7 @@ export default function QuizRoom() {
   const { roomCode } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
 
   const playerNameFromUrl = searchParams.get("name");
   const storedPlayerName = sessionStorage.getItem("player_name");
@@ -181,8 +183,8 @@ export default function QuizRoom() {
       <div style={s.page}>
         <div style={s.blob} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.card}>
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+          <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
             <div style={s.errorIcon}>🚫</div>
             <h2 style={s.cardTitle}>You've been removed</h2>
             <p style={s.cardSub}>The host removed you from this room.</p>
@@ -200,8 +202,8 @@ export default function QuizRoom() {
       <div style={s.page}>
         <div style={s.blob} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.card}>
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+          <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
             <div style={s.errorIcon}>❌</div>
             <h2 style={s.cardTitle}>Room not found</h2>
             <p style={s.cardSub}>
@@ -222,8 +224,8 @@ export default function QuizRoom() {
       <div style={s.page}>
         <div style={s.blob} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.card}>
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+          <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
             <div style={s.logo}>
               <div style={s.logoDot} />
               <span style={s.logoText}>QURIO</span>
@@ -290,19 +292,32 @@ export default function QuizRoom() {
     <div style={s.page}>
       <div style={s.blob} />
       <div style={s.grid} />
-      <div style={s.centered}>
-        <div style={s.card}>
+      <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+        <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
           <div style={s.logo}>
             <div style={s.logoDot} />
             <span style={s.logoText}>QURIO</span>
           </div>
 
-          <div style={s.roomBadge}>{roomCode}</div>
+          <div
+            style={{
+              ...s.roomBadge,
+              fontSize: isMobile ? "1rem" : "1.4rem",
+              letterSpacing: isMobile ? "0.18em" : "0.3em",
+            }}
+          >
+            {roomCode}
+          </div>
           <div style={s.scoreTag}>⭐ {score} pts</div>
 
           {!isQuestionVisible ? (
             <>
-              <div style={s.playerInfo}>
+              <div
+                style={{
+                  ...s.playerInfo,
+                  alignItems: isMobile ? "flex-start" : "center",
+                }}
+              >
                 <div style={s.playerAvatar}>{playerName[0]?.toUpperCase()}</div>
                 <div>
                   <div style={s.playerName}>{playerName}</div>
@@ -357,7 +372,14 @@ export default function QuizRoom() {
                 />
               </div>
 
-              <div style={s.questionHeader}>
+              <div
+                style={{
+                  ...s.questionHeader,
+                  flexDirection: isMobile ? "column" : "row",
+                  alignItems: isMobile ? "flex-start" : "center",
+                  gap: isMobile ? "0.35rem" : 0,
+                }}
+              >
                 <span style={{ color: "#f5a623", fontWeight: "700" }}>
                   Q{currentQuestion.index + 1}/{currentQuestion.total}
                 </span>
@@ -373,7 +395,12 @@ export default function QuizRoom() {
 
               <h2 style={s.cardTitle}>{currentQuestion.question_text}</h2>
 
-              <div style={s.optionsGrid}>
+              <div
+                style={{
+                  ...s.optionsGrid,
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                }}
+              >
                 {currentQuestion.options.map((opt) => {
                   const isSelected = selectedOption === opt.option_number;
                   const isCorrect = correctOption === opt.option_number;

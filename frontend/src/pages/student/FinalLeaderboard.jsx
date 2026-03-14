@@ -1,9 +1,11 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
+import useViewport from "../../hooks/useViewport";
 
 export default function FinalLeaderboard() {
   const navigate = useNavigate();
   const { roomCode } = useParams();
   const { state } = useLocation();
+  const { isMobile } = useViewport();
 
   const leaderboard = state?.leaderboard || [];
   const isHost = Boolean(state?.isHost);
@@ -19,8 +21,8 @@ export default function FinalLeaderboard() {
       <div style={s.page}>
         <div style={s.blob} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.card}>
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+          <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
             <div style={s.logo}>
               <div style={s.logoDot} />
               <span style={s.logoText}>QURIO</span>
@@ -45,8 +47,8 @@ export default function FinalLeaderboard() {
     <div style={s.page}>
       <div style={s.blob} />
       <div style={s.grid} />
-      <div style={s.centered}>
-        <div style={s.card}>
+      <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
+        <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
           <div style={s.logo}>
             <div style={s.logoDot} />
             <span style={s.logoText}>QURIO</span>
@@ -68,6 +70,8 @@ export default function FinalLeaderboard() {
                 key={`${entry.rank || index}-${entry.name}`}
                 style={{
                   ...s.row,
+                  gridTemplateColumns: isMobile ? "1fr" : "80px 1fr auto",
+                  justifyItems: isMobile ? "flex-start" : undefined,
                   ...(entry.name === playerName ? s.rowMe : {}),
                 }}
               >
