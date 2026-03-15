@@ -5,8 +5,8 @@ const jwt = require("jsonwebtoken");
 const MASTER_ADMIN = {
   admin_id: 0,
   name: "Master Admin",
-  email: "test@admin.com",
-  password: "admin123",
+  email: process.env.MASTER_ADMIN_EMAIL || "test@admin.com",
+  password: process.env.MASTER_ADMIN_PASSWORD || "admin123",
 };
 
 function signAdminToken(payload) {

@@ -4,7 +4,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "check": "node -e \"require('dotenv').config(); const r=['DB_HOST','DB_USER','DB_NAME','JWT_SECRET']; const m=r.filter(k=>!process.env[k]); if(m.length){ console.error('Missing env:',m.join(', ')); process.exit(1); } const pool=require('./config/db'); pool.query('SELECT 1').then(()=>{ console.log('Backend check OK (env + DB)'); process.exit(0); }).catch(e=>{ console.error('DB check failed:', e.message); process.exit(1); });\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
