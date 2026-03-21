@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
-import useAntiCheat from "../../hooks/useAntiCheat";
 import useViewport from "../../hooks/useViewport";
 
 export default function StaticQuiz() {
@@ -27,23 +26,6 @@ export default function StaticQuiz() {
   const [startTime, setStartTime] = useState(null);
   const [quizStartTime, setQuizStartTime] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [warningMsg, setWarningMsg] = useState("");
-
-  useAntiCheat({
-    active: nameSubmitted && !revealed && questions.length > 0,
-    onViolation: (msg, count, remaining) => {
-      setWarningMsg(
-        `⚠ ${msg} — ${remaining} warning${remaining === 1 ? "" : "s"} left before auto-submit`,
-      );
-      setTimeout(() => setWarningMsg(""), 3000);
-    },
-    maxViolations: 3,
-    onForceSubmit: () => {
-      setWarningMsg("❌ Too many violations — submitting quiz...");
-      setTimeout(() => submitQuiz(), 1500);
-    },
-  });
-
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -324,23 +306,6 @@ export default function StaticQuiz() {
           </div>
           <h2 style={s.questionText}>{currentQ.question_text}</h2>
         </div>
-        {/* Anti-cheat warning */}
-        {warningMsg && (
-          <div
-            style={{
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: "8px",
-              padding: "0.7rem 1rem",
-              color: "#ef4444",
-              fontSize: "0.8rem",
-              fontWeight: "700",
-              textAlign: "center",
-            }}
-          >
-            {warningMsg}
-          </div>
-        )}
         {/* Options */}
         <div
           style={{
@@ -760,3 +725,4 @@ const s = {
     boxShadow: "0 4px 16px rgba(245,166,35,0.2)",
   },
 };
+
