@@ -41,7 +41,7 @@ export default defineConfig({
   plugins: [react(), devTunnelListen()].filter(Boolean),
   server: {
     host: tunnelMode ? "::" : "0.0.0.0",
-    port: 5173,
+    port: 5174,
     strictPort: false,
     origin: devOrigin,
     headers: {
