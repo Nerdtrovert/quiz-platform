@@ -5,6 +5,13 @@ const api = axios.create({
   baseURL: API_BASE_URL,
 });
 
+const isAuthRequest = (url = "") => {
+  const normalized = String(url).toLowerCase();
+  return (
+    normalized.includes("/auth/login") || normalized.includes("/auth/register")
+  );
+};
+
 // Attach JWT token to every request automatically
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("token");
@@ -16,7 +23,11 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const status = err.response?.status;
+    const hadAuthHeader = Boolean(err.config?.headers?.Authorization);
+    const requestUrl = err.config?.url;
+
+    if (status === 401 && hadAuthHeader && !isAuthRequest(requestUrl)) {
       localStorage.removeItem("token");
       localStorage.removeItem("admin");
       window.location.href = "/admin/login";

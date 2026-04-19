@@ -25,7 +25,9 @@ export default function WaitingRoom() {
     socket.on("joined-room", ({ participant_id, quiz_id }) => {
       // Store for use in quiz room
       sessionStorage.setItem("participant_id", participant_id);
-      sessionStorage.setItem("quiz_id", quiz_id);
+      if (quiz_id != null) {
+        sessionStorage.setItem("quiz_id", String(quiz_id));
+      }
       sessionStorage.setItem("player_name", playerName);
       sessionStorage.setItem("room_code", roomCode);
       setStatus("waiting");

@@ -267,6 +267,7 @@ module.exports = function initSocket(io) {
 
         socket.emit("joined-room", {
           participant_id: result.insertId,
+          quiz_id: room.quiz_id,
           room_code,
           name: safeName,
         });
