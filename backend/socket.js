@@ -151,6 +151,7 @@ module.exports = function initSocket(io) {
     if (!room) return;
 
     if (room.questionTimer) clearTimeout(room.questionTimer);
+    if (room.autoTerminateTimer) clearTimeout(room.autoTerminateTimer);
     room.status = "ended";
 
     await pool
@@ -203,39 +204,67 @@ module.exports = function initSocket(io) {
     // ── ADMIN: Create room ──────────────────────────────────
     socket.on(
       "create-room",
-      async ({ quiz_id, admin_id, room_code, time_per_question }) => {
-        console.log("create-room received:", { quiz_id, admin_id, room_code });
-        try {
-          const [result] = await pool.query(
-            `INSERT INTO Rooms (quiz_id, admin_id, room_code, status, current_question_index)
-           VALUES (?, ?, ?, 'waiting', 0)`,
-            [quiz_id, admin_id, room_code],
-          );
-
-          rooms[room_code] = {
-            quiz_id,
-            admin_id,
-            room_id: result.insertId,
-            status: "waiting",
-            currentIndex: 0,
-            timePerQuestion: time_per_question || 20,
-            participants: {},
-            answers: {},
-            questions: [],
-            paused: false,
-            questionTimer: null,
-          };
-
-          socket.join(room_code);
-          socket.room_code = room_code;
-          socket.is_admin = true;
-
-          socket.emit("room-created", { room_id: result.insertId, room_code });
-          console.log(`Room created: ${room_code}`);
-        } catch (err) {
-          console.error("create-room error:", err.message);
-          socket.emit("error", { message: "Failed to create room" });
+      async ({ quiz_id, admin_id, time_per_question }) => {
+        // Generate a unique room code with retry
+        let room_code;
+        let result;
+        let attempts = 0;
+        while (attempts < 5) {
+          room_code = Math.random().toString(36).substring(2, 8).toUpperCase();
+          try {
+            [result] = await pool.query(
+              `INSERT INTO Rooms (quiz_id, admin_id, room_code, status, current_question_index)
+             VALUES (?, ?, ?, 'waiting', 0)`,
+              [quiz_id, admin_id, room_code],
+            );
+            break; // success
+          } catch (err) {
+            if (err.code === "ER_DUP_ENTRY") {
+              attempts++;
+              continue;
+            }
+            throw err; // other error
+          }
         }
+        if (!result) {
+          return socket.emit("error", {
+            message: "Failed to generate unique room code",
+          });
+        }
+        console.log("create-room received:", { quiz_id, admin_id, room_code });
+
+        rooms[room_code] = {
+          quiz_id,
+          admin_id,
+          room_id: result.insertId,
+          status: "waiting",
+          currentIndex: 0,
+          timePerQuestion: time_per_question || 20,
+          participants: {},
+          answers: {},
+          questions: [],
+          paused: false,
+          questionTimer: null,
+          autoTerminateTimer: null,
+        };
+
+        // Auto-terminate after 20 minutes no matter what
+        rooms[room_code].autoTerminateTimer = setTimeout(
+          async () => {
+            const r = rooms[room_code];
+            if (!r || r.status === "ended") return;
+            console.log(`Auto-terminating room ${room_code} after 20 minutes`);
+            await endQuiz(room_code);
+          },
+          20 * 60 * 1000,
+        );
+
+        socket.join(room_code);
+        socket.room_code = room_code;
+        socket.is_admin = true;
+
+        socket.emit("room-created", { room_id: result.insertId, room_code });
+        console.log(`Room created: ${room_code}`);
       },
     );
 
@@ -267,7 +296,6 @@ module.exports = function initSocket(io) {
 
         socket.emit("joined-room", {
           participant_id: result.insertId,
-          quiz_id: room.quiz_id,
           room_code,
           name: safeName,
         });
