@@ -316,3 +316,230 @@ exports.deleteStaticAttempt = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ─── GET STATIC QUIZ BY ID ────────────────────────────────
+exports.getStaticQuizById = async (req, res) => {
+  const { quizId } = req.params;
+
+  try {
+    const [[quiz]] = await pool.query(
+      `SELECT * FROM Quizzes WHERE quiz_id = ? AND is_static = 1`,
+      [quizId],
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Static quiz not found" });
+    }
+
+    const [questions] = await pool.query(
+      `SELECT qb.*, qq.order_index,
+        JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'option_id', o.option_id,
+            'option_number', o.option_number,
+            'option_text', o.option_text,
+            'is_correct', o.is_correct
+          )
+        ) AS options
+       FROM QuizQuestions qq
+       JOIN QuestionBank qb ON qq.question_id = qb.question_id
+       LEFT JOIN Options o ON qb.question_id = o.question_id
+       WHERE qq.quiz_id = ?
+       GROUP BY qb.question_id, qq.order_index
+       ORDER BY qq.order_index ASC`,
+      [quizId],
+    );
+
+    res.json({ quiz, questions });
+  } catch (err) {
+    console.error("Get static quiz by ID error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── CREATE STATIC QUIZ ───────────────────────────────────
+exports.createStaticQuiz = async (req, res) => {
+  const { title, genre, difficulty, time_per_question, question_ids } =
+    req.body;
+
+  if (!title || !question_ids || question_ids.length === 0) {
+    return res
+      .status(400)
+      .json({ message: "Title and at least one question are required" });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [result] = await conn.query(
+      `INSERT INTO Quizzes (admin_id, title, genre, difficulty, num_questions, time_per_question, is_static)
+       VALUES (NULL, ?, ?, ?, ?, ?, 1)`,
+      [
+        title,
+        genre || "Mixed",
+        difficulty || "medium",
+        question_ids.length,
+        time_per_question || 30,
+      ],
+    );
+    const quiz_id = result.insertId;
+
+    for (let i = 0; i < question_ids.length; i++) {
+      await conn.query(
+        "INSERT INTO QuizQuestions (quiz_id, question_id, order_index) VALUES (?, ?, ?)",
+        [quiz_id, question_ids[i], i],
+      );
+    }
+
+    await conn.commit();
+    res.status(201).json({ message: "Static quiz created", quiz_id });
+  } catch (err) {
+    await conn.rollback();
+    console.error("Create static quiz error:", err);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    conn.release();
+  }
+};
+
+// ─── UPDATE STATIC QUIZ ───────────────────────────────────
+exports.updateStaticQuiz = async (req, res) => {
+  const { quizId } = req.params;
+  const { title, genre, difficulty, time_per_question, question_ids } =
+    req.body;
+
+  if (!title) {
+    return res.status(400).json({ message: "Title is required" });
+  }
+
+  const conn = await pool.getConnection();
+  try {
+    const [[quiz]] = await conn.query(
+      "SELECT * FROM Quizzes WHERE quiz_id = ? AND is_static = 1",
+      [quizId],
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Static quiz not found" });
+    }
+
+    await conn.beginTransaction();
+
+    // Update quiz metadata
+    await conn.query(
+      `UPDATE Quizzes
+       SET title = ?, genre = ?, difficulty = ?, time_per_question = ?, num_questions = ?
+       WHERE quiz_id = ?`,
+      [
+        title,
+        genre || "Mixed",
+        difficulty || "medium",
+        time_per_question || 30,
+        question_ids ? question_ids.length : quiz.num_questions,
+        quizId,
+      ],
+    );
+
+    // Update questions if provided
+    if (question_ids && question_ids.length > 0) {
+      await conn.query("DELETE FROM QuizQuestions WHERE quiz_id = ?", [quizId]);
+
+      for (let i = 0; i < question_ids.length; i++) {
+        await conn.query(
+          "INSERT INTO QuizQuestions (quiz_id, question_id, order_index) VALUES (?, ?, ?)",
+          [quizId, question_ids[i], i],
+        );
+      }
+    }
+
+    await conn.commit();
+    res.json({ message: "Static quiz updated", quiz_id: quizId });
+  } catch (err) {
+    await conn.rollback();
+    console.error("Update static quiz error:", err);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    conn.release();
+  }
+};
+
+// ─── DELETE STATIC QUIZ ───────────────────────────────────
+exports.deleteStaticQuiz = async (req, res) => {
+  const { quizId } = req.params;
+
+  try {
+    const [[quiz]] = await pool.query(
+      "SELECT * FROM Quizzes WHERE quiz_id = ? AND is_static = 1",
+      [quizId],
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Static quiz not found" });
+    }
+
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      await conn.query("DELETE FROM StaticAttempts WHERE quiz_id = ?", [quizId]);
+      await conn.query("DELETE FROM QuizQuestions WHERE quiz_id = ?", [quizId]);
+      await conn.query("DELETE FROM Quizzes WHERE quiz_id = ?", [quizId]);
+
+      await conn.commit();
+      res.json({ message: "Static quiz deleted" });
+    } finally {
+      conn.release();
+    }
+  } catch (err) {
+    console.error("Delete static quiz error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── GET STATIC LEADERBOARD FOR A QUIZ ─────────────────────
+exports.getStaticLeaderboard = async (req, res) => {
+  const { quizId } = req.params;
+
+  try {
+    const [[quiz]] = await pool.query(
+      "SELECT * FROM Quizzes WHERE quiz_id = ? AND is_static = 1",
+      [quizId],
+    );
+
+    if (!quiz) {
+      return res.status(404).json({ message: "Static quiz not found" });
+    }
+
+    const [leaderboard] = await pool.query(
+      `SELECT
+        attempt_id,
+        quiz_id,
+        player_name,
+        total_points,
+        correct_count,
+        wrong_count,
+        time_taken_ms,
+        final_rank,
+        completed_at
+       FROM StaticAttempts
+       WHERE quiz_id = ?
+       ORDER BY final_rank ASC, total_points DESC`,
+      [quizId],
+    );
+
+    res.json({
+      quiz: {
+        quiz_id: quiz.quiz_id,
+        title: quiz.title,
+        genre: quiz.genre,
+        difficulty: quiz.difficulty,
+        num_questions: quiz.num_questions,
+      },
+      leaderboard,
+    });
+  } catch (err) {
+    console.error("Get static leaderboard error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};

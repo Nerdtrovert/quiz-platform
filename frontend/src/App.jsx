@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
+import useViewport from "./hooks/useViewport";
 
 import Landing from "./pages/Landing";
 import AdminLogin from "./pages/admin/AdminLogin";
@@ -17,6 +18,8 @@ import FinalLeaderboard from "./pages/student/FinalLeaderboard";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 export default function App() {
+  const { isMobile } = useViewport();
+
   return (
     <AuthProvider>
       <BrowserRouter>
@@ -82,7 +85,9 @@ export default function App() {
             />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
-          <div style={footerStyle}>Copyright 2026 Qurio. All rights reserved.</div>
+          <div style={isMobile ? footerStyleMobile : footerStyle}>
+            Copyright 2026 Qurio. All rights reserved.
+          </div>
         </>
       </BrowserRouter>
     </AuthProvider>
@@ -99,4 +104,12 @@ const footerStyle = {
   letterSpacing: "0.04em",
   zIndex: 999,
   pointerEvents: "none",
+};
+
+const footerStyleMobile = {
+  fontSize: "0.68rem",
+  color: "#5f5f5f",
+  letterSpacing: "0.04em",
+  textAlign: "center",
+  padding: "0.75rem 1rem 1.25rem",
 };

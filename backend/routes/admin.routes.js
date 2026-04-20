@@ -10,6 +10,11 @@ const {
   removeLiveParticipant,
   endLiveRoom,
   deleteStaticAttempt,
+  getStaticQuizById,
+  createStaticQuiz,
+  updateStaticQuiz,
+  deleteStaticQuiz,
+  getStaticLeaderboard,
 } = require("../controllers/admin.controller");
 const {
   verifyToken,
@@ -54,6 +59,38 @@ router.delete(
   verifyToken,
   requireMasterAdmin,
   deleteStaticAttempt,
+);
+
+// Static Quiz Management Routes
+router.get(
+  "/system/static-quizzes/:quizId",
+  verifyToken,
+  requireMasterAdmin,
+  getStaticQuizById,
+);
+router.post(
+  "/system/static-quizzes",
+  verifyToken,
+  requireMasterAdmin,
+  createStaticQuiz,
+);
+router.put(
+  "/system/static-quizzes/:quizId",
+  verifyToken,
+  requireMasterAdmin,
+  updateStaticQuiz,
+);
+router.delete(
+  "/system/static-quizzes/:quizId",
+  verifyToken,
+  requireMasterAdmin,
+  deleteStaticQuiz,
+);
+router.get(
+  "/system/static-quizzes/:quizId/leaderboard",
+  verifyToken,
+  requireMasterAdmin,
+  getStaticLeaderboard,
 );
 
 module.exports = router;

@@ -65,7 +65,6 @@ export default function Landing() {
       return;
     }
     setError("");
-    // ✅ Fixed: was using `name` instead of `playerName`
     navigate(
       `/waiting/${roomCode.trim()}?name=${encodeURIComponent(playerName.trim())}`,
     );

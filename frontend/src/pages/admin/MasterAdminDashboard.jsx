@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
+import StaticQuizModal from "../../components/StaticQuizModal";
+import StaticLeaderboardModal from "../../components/StaticLeaderboardModal";
 
 export default function MasterAdminDashboard() {
   const navigate = useNavigate();
@@ -17,6 +19,10 @@ export default function MasterAdminDashboard() {
   const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [selectedQuizId, setSelectedQuizId] = useState("");
   const [attempts, setAttempts] = useState([]);
+  const [showQuizModal, setShowQuizModal] = useState(false);
+  const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
+  const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [leaderboardQuizId, setLeaderboardQuizId] = useState(null);
 
   useEffect(() => {
     if (!admin.is_master) {
@@ -66,6 +72,34 @@ export default function MasterAdminDashboard() {
   const handleDeleteAttempt = async (attemptId) => {
     await api.delete(`/admin/system/static-attempts/${attemptId}`);
     fetchAll();
+  };
+
+  const handleOpenCreateQuiz = () => {
+    setSelectedQuiz(null);
+    setShowQuizModal(true);
+  };
+
+  const handleOpenEditQuiz = (quiz) => {
+    setSelectedQuiz(quiz);
+    setShowQuizModal(true);
+  };
+
+  const handleOpenLeaderboard = (quizId) => {
+    setLeaderboardQuizId(quizId);
+    setShowLeaderboardModal(true);
+  };
+
+  const handleDeleteQuiz = async (quizId) => {
+    if (!window.confirm("Are you sure you want to delete this quiz? This cannot be undone.")) {
+      return;
+    }
+    try {
+      await api.delete(`/admin/system/static-quizzes/${quizId}`);
+      fetchAll();
+    } catch (err) {
+      console.error("Error deleting quiz:", err);
+      alert("Error deleting quiz");
+    }
   };
 
   return (
@@ -198,18 +232,26 @@ export default function MasterAdminDashboard() {
         <section style={s.section}>
           <div style={s.sectionHead}>
             <h2 style={s.sectionTitle}>Static Quiz Oversight</h2>
-            <select
-              style={s.select}
-              value={selectedQuizId}
-              onChange={(e) => setSelectedQuizId(e.target.value)}
-            >
-              <option value="">All static quizzes</option>
-              {staticQuizzes.map((quiz) => (
-                <option key={quiz.quiz_id} value={quiz.quiz_id}>
-                  {quiz.quiz_title}
-                </option>
-              ))}
-            </select>
+            <div style={s.headerActions}>
+              <select
+                style={s.select}
+                value={selectedQuizId}
+                onChange={(e) => setSelectedQuizId(e.target.value)}
+              >
+                <option value="">All static quizzes</option>
+                {staticQuizzes.map((quiz) => (
+                  <option key={quiz.quiz_id} value={quiz.quiz_id}>
+                    {quiz.quiz_title}
+                  </option>
+                ))}
+              </select>
+              <button
+                style={s.primaryBtn}
+                onClick={handleOpenCreateQuiz}
+              >
+                + Create Quiz
+              </button>
+            </div>
           </div>
 
           <div style={s.quizSummaryGrid}>
@@ -221,6 +263,26 @@ export default function MasterAdminDashboard() {
                 </div>
                 <div style={s.quizSummaryTop}>
                   Best {quiz.top_score} pts · fastest {quiz.best_time_ms} ms
+                </div>
+                <div style={s.quizCardActions}>
+                  <button
+                    style={s.quizActionBtn}
+                    onClick={() => handleOpenLeaderboard(quiz.quiz_id)}
+                  >
+                    View Leaderboard
+                  </button>
+                  <button
+                    style={s.quizActionBtn}
+                    onClick={() => handleOpenEditQuiz(quiz)}
+                  >
+                    Edit
+                  </button>
+                  <button
+                    style={s.quizActionBtnDanger}
+                    onClick={() => handleDeleteQuiz(quiz.quiz_id)}
+                  >
+                    Delete
+                  </button>
                 </div>
               </div>
             ))}
@@ -254,6 +316,23 @@ export default function MasterAdminDashboard() {
             </div>
           )}
         </section>
+
+        <StaticQuizModal
+          isOpen={showQuizModal}
+          onClose={() => setShowQuizModal(false)}
+          quiz={selectedQuiz}
+          onSuccess={() => {
+            fetchAll();
+            setShowQuizModal(false);
+          }}
+        />
+
+        <StaticLeaderboardModal
+          isOpen={showLeaderboardModal}
+          onClose={() => setShowLeaderboardModal(false)}
+          quizId={leaderboardQuizId}
+          onEntryDeleted={fetchAll}
+        />
       </main>
     </div>
   );
@@ -457,4 +536,49 @@ const s = {
     background: "#171111",
   },
   attemptScore: { fontWeight: 800, color: "#fdba74" },
+  headerActions: {
+    display: "flex",
+    gap: "0.8rem",
+    alignItems: "center",
+  },
+  primaryBtn: {
+    background: "linear-gradient(135deg, #10b981, #059669)",
+    border: "none",
+    color: "#fff7ed",
+    padding: "0.7rem 1.2rem",
+    borderRadius: "10px",
+    fontWeight: 700,
+    cursor: "pointer",
+    fontSize: "0.9rem",
+    whiteSpace: "nowrap",
+  },
+  quizCardActions: {
+    display: "flex",
+    gap: "0.5rem",
+    marginTop: "0.75rem",
+  },
+  quizActionBtn: {
+    flex: 1,
+    background: "#1a1414",
+    border: "1px solid #2d2421",
+    color: "#7c3aed",
+    padding: "0.5rem 0.6rem",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    transition: "all 0.2s",
+  },
+  quizActionBtnDanger: {
+    flex: 1,
+    background: "transparent",
+    border: "1px solid rgba(248,113,113,0.35)",
+    color: "#fca5a5",
+    padding: "0.5rem 0.6rem",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+    fontWeight: 700,
+    transition: "all 0.2s",
+  },
 };
