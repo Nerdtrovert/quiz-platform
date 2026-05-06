@@ -1,6 +1,6 @@
 -- =============================================
 -- Quiz Platform — Full Database Schema
--- MySQL 8.0+ | 10 Tables
+-- MySQL - 10 Tables
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS quiz_platform;

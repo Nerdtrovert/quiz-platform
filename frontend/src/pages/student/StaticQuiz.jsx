@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
 import useViewport from "../../hooks/useViewport";
+import { DoodleAtom, DoodleMonitor, DoodleGlobe, DoodleBook, DoodleController, DoodlePalette } from "../../components/ThemeDoodles";
 
 export default function StaticQuiz() {
   const { quizId } = useParams();
@@ -166,6 +167,15 @@ export default function StaticQuiz() {
         <div style={s.blob1} />
         <div style={s.blob2} />
         <div style={s.grid} />
+
+        {/* Background Doodles */}
+        <DoodleAtom style={{ top: "18%", left: "6%" }} />
+        <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+        <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+        <DoodleBook style={{ top: "42%", right: "4%" }} />
+        <DoodleController style={{ top: "45%", left: "15%" }} />
+        <DoodlePalette style={{ top: "32%", right: "16%" }} />
+
         <div style={{ ...s.centered, padding: isMobile ? "1rem" : 0 }}>
           <div
             style={{
@@ -225,6 +235,14 @@ export default function StaticQuiz() {
       <div style={s.blob1} />
       <div style={s.blob2} />
       <div style={s.grid} />
+
+      {/* Background Doodles */}
+      <DoodleAtom style={{ top: "18%", left: "6%" }} />
+      <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+      <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+      <DoodleBook style={{ top: "42%", right: "4%" }} />
+      <DoodleController style={{ top: "45%", left: "15%" }} />
+      <DoodlePalette style={{ top: "32%", right: "16%" }} />
 
       <div
         style={{

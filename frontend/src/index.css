@@ -80,3 +80,97 @@ a {
     border-bottom: none;
   }
 }
+
+/* ============================= */
+/* ✨ Animations                 */
+/* ============================= */
+
+@keyframes floatOrb1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, 30px) scale(1.05); }
+}
+
+@keyframes floatOrb2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-30px, -20px) scale(1.1); }
+}
+
+@keyframes scrollGrid {
+  0% { background-position: 0 0; }
+  100% { background-position: 48px 48px; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(245,166,35,0.4); }
+  50% { box-shadow: 0 0 20px rgba(245,166,35,0.8); }
+}
+
+/* Shimmer utility class */
+.shimmer-text {
+  background: linear-gradient(
+    90deg,
+    rgba(245, 166, 35, 1) 0%,
+    rgba(255, 255, 255, 0.8) 50%,
+    rgba(245, 166, 35, 1) 100%
+  );
+  background-size: 200% auto;
+  color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: shimmer 3s linear infinite;
+}
+
+@keyframes drawDoodle {
+  0% { stroke-dasharray: 0 1000; }
+  40% { stroke-dasharray: 1000 0; }
+  60% { stroke-dasharray: 1000 0; }
+  100% { stroke-dasharray: 0 1000; }
+}
+
+.doodle-draw path, 
+.doodle-draw circle, 
+.doodle-draw ellipse, 
+.doodle-draw rect {
+  animation: drawDoodle 8s linear infinite;
+}
+
+@keyframes floatDoodle {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(15px) rotate(3deg); }
+}
+
+@keyframes floatParticle {
+  0% { transform: translate(0, 0) scale(0.5) rotate(0deg); opacity: 0; }
+  15% { opacity: 1; transform: translate(var(--tx, 0), var(--ty, 0)) scale(1.5) rotate(15deg); }
+  100% { transform: translate(calc(var(--tx, 0) * 2), calc(var(--ty, 0) * 2)) scale(2) rotate(45deg); opacity: 0; }
+}
+
+.particle {
+  position: fixed;
+  pointer-events: none;
+  font-size: 2.1rem; /* 15% smaller */
+  animation: floatParticle 2.4s ease-out forwards; /* 25% slower */
+  z-index: 9999;
+}
+
+.doodle-draw {
+  cursor: pointer;
+}
+
+.doodle-draw:hover {
+  filter: drop-shadow(0 0 20px rgba(245, 166, 35, 0.9));
+  animation-play-state: paused;
+}
+.doodle-draw:hover path,
+.doodle-draw:hover circle,
+.doodle-draw:hover ellipse,
+.doodle-draw:hover rect {
+  stroke-width: 4px;
+  stroke: #fff;
+  transition: all 0.3s ease;
+}

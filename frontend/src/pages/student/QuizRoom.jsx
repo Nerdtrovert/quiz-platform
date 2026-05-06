@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import useViewport from "../../hooks/useViewport";
 import { SOCKET_URL } from "../../utils/runtime";
+import { DoodleAtom, DoodleMonitor, DoodleGlobe, DoodleBook, DoodleController, DoodlePalette } from "../../components/ThemeDoodles";
 
 export default function QuizRoom() {
   const { roomCode } = useParams();
@@ -292,6 +293,15 @@ export default function QuizRoom() {
     <div style={s.page}>
       <div style={s.blob} />
       <div style={s.grid} />
+      
+      {/* Background Doodles */}
+      <DoodleAtom style={{ top: "18%", left: "6%" }} />
+      <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+      <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+      <DoodleBook style={{ top: "42%", right: "4%" }} />
+      <DoodleController style={{ top: "45%", left: "15%" }} />
+      <DoodlePalette style={{ top: "32%", right: "16%" }} />
+
       <div style={{ ...s.centered, padding: isMobile ? "1rem" : "2rem" }}>
         <div style={{ ...s.card, padding: isMobile ? "1.25rem" : "2rem" }}>
           <div style={s.logo}>

@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import useViewport from "../hooks/useViewport";
+import { DoodleAtom, DoodleMonitor, DoodleGlobe, DoodleBook, DoodleController, DoodlePalette } from "../components/ThemeDoodles";
 
 const STATIC_QUIZZES = [
   {
@@ -11,6 +12,7 @@ const STATIC_QUIZZES = [
     desc: "Physics, Chemistry, Biology",
     difficulty: "Medium",
     players: "2.4k",
+    particles: ["🧬", "🔬", "⚛️", "🌡️"],
   },
   {
     id: 2,
@@ -20,6 +22,7 @@ const STATIC_QUIZZES = [
     desc: "Ancient to Modern History",
     difficulty: "Medium",
     players: "1.8k",
+    particles: ["🏺", "🏛️", "👑", "🏹"],
   },
   {
     id: 3,
@@ -29,6 +32,7 @@ const STATIC_QUIZZES = [
     desc: "CS, Programming, AI",
     difficulty: "Medium",
     players: "3.1k",
+    particles: ["01", "</>", "⚡", "🖥️"],
   },
   {
     id: 4,
@@ -38,6 +42,7 @@ const STATIC_QUIZZES = [
     desc: "Everything, everywhere",
     difficulty: "Mixed",
     players: "4.2k",
+    particles: ["🌟", "❓", "🧩", "🎯"],
   },
 ];
 
@@ -49,6 +54,35 @@ export default function Landing() {
   const [step, setStep] = useState("code");
   const [error, setError] = useState("");
   const [hoveredQuiz, setHoveredQuiz] = useState(null);
+  const [particles, setParticles] = useState([]);
+  
+  const spawnParticles = (e, qParticles) => {
+    if (!qParticles) return;
+    const x = e.clientX;
+    const y = e.clientY;
+    
+    const newParticles = Array.from({ length: 6 }).map((_, i) => ({
+      id: Date.now() + i + Math.random(),
+      x: x,
+      y: y,
+      tx: (Math.random() - 0.5) * 400, // Travel distance X
+      ty: (Math.random() - 0.5) * 400, // Travel distance Y
+      text: qParticles[Math.floor(Math.random() * qParticles.length)]
+    }));
+
+    setParticles(prev => [...prev, ...newParticles]);
+
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => !newParticles.find(np => np.id === p.id)));
+    }, 2400);
+  };
+
+  const handleMouseMove = (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+    document.documentElement.style.setProperty('--mouse-x', x);
+    document.documentElement.style.setProperty('--mouse-y', y);
+  };
 
   const handleCodeSubmit = () => {
     if (roomCode.trim().length !== 6) {
@@ -71,15 +105,39 @@ export default function Landing() {
   };
 
   return (
-    <div style={s.page}>
+    <div style={s.page} onMouseMove={handleMouseMove}>
       <div style={s.blob1} />
       <div style={s.blob2} />
       <div style={s.grid} />
+      
+      {/* Full-screen Particles */}
+      {particles.map(p => (
+        <span 
+          key={p.id} 
+          className="particle" 
+          style={{ 
+            left: p.x, 
+            top: p.y, 
+            '--tx': `${p.tx}px`, 
+            '--ty': `${p.ty}px` 
+          }}
+        >
+          {p.text}
+        </span>
+      ))}
+      
+      {/* Background Thematic Doodles */}
+      <DoodleAtom style={{ top: "18%", left: "6%" }} />
+      <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+      <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+      <DoodleBook style={{ top: "42%", right: "4%" }} />
+      <DoodleController style={{ top: "45%", left: "15%" }} />
+      <DoodlePalette style={{ top: "32%", right: "16%" }} />
 
       <div
         style={{
           ...s.container,
-          padding: isMobile ? "0 1rem 4rem" : "0 2rem 4rem",
+          padding: isMobile ? "0 1rem" : "0 2rem",
         }}
       >
         {/* Header */}
@@ -110,7 +168,7 @@ export default function Landing() {
           <h1 style={s.heroTitle}>
             Test your knowledge.
             <br />
-            <span style={s.heroAccent}>Beat the clock.</span>
+            <span style={s.heroAccent} className="shimmer-text">Beat the clock.</span>
           </h1>
           <p style={{ ...s.heroSub, fontSize: isMobile ? "0.88rem" : "0.95rem" }}>
             Join a live quiz with a room code, or try one of our curated quizzes
@@ -252,8 +310,13 @@ export default function Landing() {
                   style={{
                     ...s.quizCard,
                     ...(hoveredQuiz === q.id ? s.quizCardHover : {}),
+                    position: 'relative',
+                    overflow: 'hidden'
                   }}
-                  onMouseEnter={() => setHoveredQuiz(q.id)}
+                  onMouseEnter={(e) => {
+                    setHoveredQuiz(q.id);
+                    spawnParticles(e, q.particles);
+                  }}
                   onMouseLeave={() => setHoveredQuiz(null)}
                   onClick={() => navigate(`/quiz/${q.id}`)}
                 >
@@ -273,37 +336,47 @@ export default function Landing() {
           </div>
         </div>
 
-        {/* Stats bar */}
-        <div
-          style={{
-            ...s.statsBar,
-            display: isMobile ? "grid" : "flex",
-            gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
-            padding: isMobile ? "1rem" : "1.2rem 2rem",
-            gap: isMobile ? "0.75rem" : 0,
-          }}
-        >
-          {[
-            { label: "Questions", value: "500+" },
-            { label: "Genres", value: "4" },
-            { label: "Players Today", value: "1.2k" },
-            { label: "Avg Score", value: "72%" },
-          ].map((stat, i) => (
-            <div
-              key={i}
-              style={{
-                ...s.statItem,
-                ...(isMobile
-                  ? { borderRight: "none", padding: "0.75rem 0.5rem" }
-                  : i === 3
-                    ? { borderRight: "none" }
-                    : {}),
-              }}
-            >
-              <span style={s.statVal}>{stat.value}</span>
-              <span style={s.statLabel}>{stat.label}</span>
-            </div>
-          ))}
+        {/* Footer Area */}
+        <div style={{ marginTop: "auto", width: "100%", paddingBottom: "2rem", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {/* Stats bar */}
+          <div
+            style={{
+              ...s.statsBar,
+              display: isMobile ? "grid" : "flex",
+              gridTemplateColumns: isMobile ? "1fr 1fr" : undefined,
+              padding: isMobile ? "1rem" : "1.2rem 2rem",
+              gap: isMobile ? "0.75rem" : 0,
+            }}
+          >
+            {[
+              { label: "Questions", value: "500+" },
+              { label: "Genres", value: "4" },
+              { label: "Players Today", value: "1.2k" },
+              { label: "Avg Score", value: "72%" },
+            ].map((stat, i) => (
+              <div
+                key={i}
+                style={{
+                  ...s.statItem,
+                  ...(isMobile
+                    ? { borderRight: "none", padding: "0.75rem 0.5rem" }
+                    : i === 3
+                      ? { borderRight: "none" }
+                      : {}),
+                }}
+              >
+                <span style={s.statVal}>{stat.value}</span>
+                <span style={s.statLabel}>{stat.label}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer details */}
+          <div style={{ textAlign: "center", fontSize: "0.75rem", color: "#666", fontWeight: "600", letterSpacing: "0.05em", lineHeight: "1.6" }}>
+            Made with <span style={{ color: "#f5a623" }}>⚡</span> by Prajwal Navada G P
+            <br />
+            <span style={{ fontSize: "0.65rem", color: "#555", fontWeight: "500" }}>&copy; {new Date().getFullYear()} Qurio.</span>
+          </div>
         </div>
       </div>
     </div>
@@ -318,6 +391,8 @@ const s = {
     fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
     position: "relative",
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
   },
   blob1: {
     position: "fixed",
@@ -329,6 +404,7 @@ const s = {
     background:
       "radial-gradient(circle, rgba(245,166,35,0.07) 0%, transparent 70%)",
     pointerEvents: "none",
+    animation: "floatOrb1 12s ease-in-out infinite",
   },
   blob2: {
     position: "fixed",
@@ -340,6 +416,7 @@ const s = {
     background:
       "radial-gradient(circle, rgba(245,166,35,0.04) 0%, transparent 70%)",
     pointerEvents: "none",
+    animation: "floatOrb2 15s ease-in-out infinite",
   },
   grid: {
     position: "fixed",
@@ -347,13 +424,18 @@ const s = {
     backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
     backgroundSize: "48px 48px",
     pointerEvents: "none",
+    animation: "scrollGrid 20s linear infinite",
   },
   container: {
     maxWidth: "1200px",
+    width: "100%",
     margin: "0 auto",
     padding: "0 2rem",
     position: "relative",
     zIndex: 1,
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
   },
   header: {
     display: "flex",
@@ -370,6 +452,7 @@ const s = {
     borderRadius: "50%",
     background: "#f5a623",
     boxShadow: "0 0 10px rgba(245,166,35,0.7)",
+    animation: "pulseGlow 2.5s infinite",
   },
   logoText: {
     fontSize: "0.85rem",
@@ -429,7 +512,9 @@ const s = {
     alignItems: "start",
   },
   joinCard: {
-    background: "#0f0f0f",
+    background: "rgba(15, 15, 15, 0.7)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     border: "1px solid #222",
     borderRadius: "14px",
     padding: "1.8rem",
@@ -592,7 +677,9 @@ const s = {
   },
   quizGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" },
   quizCard: {
-    background: "#161616",
+    background: "rgba(22, 22, 22, 0.6)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
     border: "1px solid #2a2a2a",
     borderRadius: "12px",
     padding: "1.1rem",
@@ -602,7 +689,9 @@ const s = {
   },
   quizCardHover: {
     border: "1px solid rgba(245,166,35,0.4)",
-    background: "#1c1c1c",
+    background: "rgba(28, 28, 28, 0.8)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     transform: "translateY(-2px)",
     boxShadow: "0 8px 24px rgba(245,166,35,0.1)",
   },
@@ -645,11 +734,12 @@ const s = {
   statsBar: {
     display: "flex",
     justifyContent: "center",
-    background: "#0f0f0f",
+    background: "rgba(15, 15, 15, 0.7)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     border: "1px solid #1e1e1e",
     borderRadius: "12px",
     padding: "1.2rem 2rem",
-    marginBottom: "2rem",
   },
   statItem: {
     display: "flex",
