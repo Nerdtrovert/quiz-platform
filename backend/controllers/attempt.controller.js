@@ -66,44 +66,20 @@ exports.submitAttempt = async (req, res) => {
       }
     });
 
-    // Insert attempt
-    const [result] = await pool.query(
-      `INSERT INTO StaticAttempts
-         (quiz_id, player_name, total_points, correct_count, wrong_count, time_taken_ms)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        quiz_id,
-        player_name,
-        total_points,
-        correct_count,
-        wrong_count,
-        time_taken_ms || 0,
-      ],
-    );
-    const attempt_id = result.insertId;
-
-    // Get rank (how many people scored higher)
-    const [rankRows] = await pool.query(
-      `SELECT COUNT(*) + 1 AS final_rank FROM StaticAttempts
-       WHERE quiz_id = ? AND total_points > ? AND attempt_id != ?`,
-      [quiz_id, total_points, attempt_id],
-    );
-    const final_rank = rankRows[0].final_rank;
-
-    // Update rank in attempt
+    // Save attempt to StaticAttempts table for admin tracking
     await pool.query(
-      "UPDATE StaticAttempts SET final_rank = ? WHERE attempt_id = ?",
-      [final_rank, attempt_id],
+      `INSERT INTO StaticAttempts (quiz_id, player_name, total_points, correct_count, wrong_count, time_taken_ms, completed_at)
+       VALUES (?, ?, ?, ?, ?, ?, NOW())`,
+      [quiz_id, player_name, total_points, correct_count, wrong_count, time_taken_ms || 0],
     );
 
     res.status(201).json({
-      message: "Attempt submitted",
-      attempt_id,
+      message: "Practice quiz scored",
       total_points,
       correct_count,
       wrong_count,
-      final_rank,
-      total_questions: questions.length,
+      total_questions: scoredAnswers.length,
+      time_taken_ms: time_taken_ms || 0,
       scored_answers: scoredAnswers,
     });
   } catch (err) {

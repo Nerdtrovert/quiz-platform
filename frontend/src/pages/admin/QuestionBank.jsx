@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api";
+import RichQuestionText from "../../components/RichQuestionText";
 
 const GENRES = ["Science", "History", "Tech", "Mixed", "Math", "General"];
 const DIFFICULTIES = ["easy", "medium", "hard"];
@@ -110,7 +111,7 @@ export default function QuestionBank() {
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>Qurio</span>
           </div>
           <nav style={s.nav}>
             {[
@@ -121,8 +122,8 @@ export default function QuestionBank() {
                 path: "/admin/questions",
                 active: true,
               },
-              { icon: "📝", label: "My Quizzes", path: "/admin/create-quiz" },
-              { icon: "🚀", label: "Start Room", path: "/admin/create-exam" },
+              { icon: "📝", label: "Create Quiz", path: "/admin/create-quiz" },
+              { icon: "🚀", label: "Start Room", path: "/admin/live" },
             ].map((item) => (
               <button
                 key={item.path}
@@ -362,7 +363,7 @@ export default function QuestionBank() {
                     </button>
                   </div>
                 </div>
-                <p style={s.questionText}>{q.question_text}</p>
+                <RichQuestionText text={q.question_text} style={s.questionText} />
                 {expandedQ === q.question_id && (
                   <div style={s.optionsList}>
                     {(typeof q.options === "string"

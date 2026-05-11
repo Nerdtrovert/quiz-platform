@@ -1,11 +1,14 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../utils/api";
-import useAntiCheat from "../../hooks/useAntiCheat";
+import useViewport from "../../hooks/useViewport";
+import { DoodleAtom, DoodleMonitor, DoodleGlobe, DoodleBook, DoodleController, DoodlePalette } from "../../components/ThemeDoodles";
+import RichQuestionText from "../../components/RichQuestionText";
 
 export default function StaticQuiz() {
   const { quizId } = useParams();
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
 
   // Quiz data
   const [quiz, setQuiz] = useState(null);
@@ -25,23 +28,6 @@ export default function StaticQuiz() {
   const [startTime, setStartTime] = useState(null);
   const [quizStartTime, setQuizStartTime] = useState(null);
   const [submitting, setSubmitting] = useState(false);
-  const [warningMsg, setWarningMsg] = useState("");
-
-  useAntiCheat({
-    active: nameSubmitted && !revealed && questions.length > 0,
-    onViolation: (msg, count, remaining) => {
-      setWarningMsg(
-        `⚠ ${msg} — ${remaining} warning${remaining === 1 ? "" : "s"} left before auto-submit`,
-      );
-      setTimeout(() => setWarningMsg(""), 3000);
-    },
-    maxViolations: 3,
-    onForceSubmit: () => {
-      setWarningMsg("❌ Too many violations — submitting quiz...");
-      setTimeout(() => submitQuiz(), 1500);
-    },
-  });
-
   const timerRef = useRef(null);
 
   useEffect(() => {
@@ -182,11 +168,25 @@ export default function StaticQuiz() {
         <div style={s.blob1} />
         <div style={s.blob2} />
         <div style={s.grid} />
-        <div style={s.centered}>
-          <div style={s.nameCard}>
+
+        {/* Background Doodles */}
+        <DoodleAtom style={{ top: "18%", left: "6%" }} />
+        <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+        <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+        <DoodleBook style={{ top: "42%", right: "4%" }} />
+        <DoodleController style={{ top: "45%", left: "15%" }} />
+        <DoodlePalette style={{ top: "32%", right: "16%" }} />
+
+        <div style={{ ...s.centered, padding: isMobile ? "1rem" : 0 }}>
+          <div
+            style={{
+              ...s.nameCard,
+              padding: isMobile ? "1.5rem" : "2.5rem",
+            }}
+          >
             <div style={s.nameLogo}>
               <div style={s.logoDot} />
-              <span style={s.logoText}>QUIZLIVE</span>
+              <span style={s.logoText}>Qurio</span>
             </div>
             <div style={s.quizBadge}>
               {quiz?.genre} · {quiz?.difficulty}
@@ -237,12 +237,32 @@ export default function StaticQuiz() {
       <div style={s.blob2} />
       <div style={s.grid} />
 
-      <div style={s.quizContainer}>
+      {/* Background Doodles */}
+      <DoodleAtom style={{ top: "18%", left: "6%" }} />
+      <DoodleMonitor style={{ top: "15%", right: "8%" }} />
+      <DoodleGlobe style={{ top: "35%", left: "2%" }} />
+      <DoodleBook style={{ top: "42%", right: "4%" }} />
+      <DoodleController style={{ top: "45%", left: "15%" }} />
+      <DoodlePalette style={{ top: "32%", right: "16%" }} />
+
+      <div
+        style={{
+          ...s.quizContainer,
+          padding: isMobile ? "1rem" : "1.5rem 2rem",
+        }}
+      >
         {/* Top bar */}
-        <div style={s.topBar}>
+        <div
+          style={{
+            ...s.topBar,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "0.75rem" : 0,
+          }}
+        >
           <div style={s.topLeft}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>Qurio</span>
           </div>
           <div style={s.progress}>
             {questions.map((_, i) => (
@@ -277,7 +297,14 @@ export default function StaticQuiz() {
         </div>
 
         {/* Timer + player */}
-        <div style={s.timerRow}>
+        <div
+          style={{
+            ...s.timerRow,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "0.6rem" : 0,
+          }}
+        >
           <span style={s.playerTag}>👤 {playerName}</span>
           <div
             style={{
@@ -291,32 +318,20 @@ export default function StaticQuiz() {
         </div>
 
         {/* Question */}
-        <div style={s.questionCard}>
-          <div style={s.questionMeta}>
+        <div style={{ ...s.questionCard, padding: isMobile ? "1.1rem" : "1.5rem" }}>
+          <div style={{ ...s.questionMeta, flexWrap: "wrap" }}>
             <span style={s.genreTag}>{currentQ.genre}</span>
             <span style={s.pointsTag}>{currentQ.base_points} pts</span>
           </div>
-          <h2 style={s.questionText}>{currentQ.question_text}</h2>
+          <RichQuestionText text={currentQ.question_text} style={s.questionText} />
         </div>
-        {/* Anti-cheat warning */}
-        {warningMsg && (
-          <div
-            style={{
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: "8px",
-              padding: "0.7rem 1rem",
-              color: "#ef4444",
-              fontSize: "0.8rem",
-              fontWeight: "700",
-              textAlign: "center",
-            }}
-          >
-            {warningMsg}
-          </div>
-        )}
         {/* Options */}
-        <div style={s.optionsGrid}>
+        <div
+          style={{
+            ...s.optionsGrid,
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          }}
+        >
           {options.map((opt) => (
             <button
               key={opt.option_number}
@@ -342,7 +357,13 @@ export default function StaticQuiz() {
 
         {/* Feedback + Next */}
         {revealed && (
-          <div style={s.feedbackRow}>
+          <div
+            style={{
+              ...s.feedbackRow,
+              flexDirection: isMobile ? "column" : "row",
+              alignItems: isMobile ? "stretch" : "center",
+            }}
+          >
             <div
               style={{
                 ...s.feedbackBadge,
@@ -360,7 +381,11 @@ export default function StaticQuiz() {
                   : "✗ Wrong"}
             </div>
             <button
-              style={{ ...s.nextBtn, ...(submitting ? { opacity: 0.6 } : {}) }}
+              style={{
+                ...s.nextBtn,
+                ...(isMobile ? { width: "100%", marginLeft: 0 } : {}),
+                ...(submitting ? { opacity: 0.6 } : {}),
+              }}
               onClick={handleNext}
               disabled={submitting}
             >
@@ -719,3 +744,4 @@ const s = {
     boxShadow: "0 4px 16px rgba(245,166,35,0.2)",
   },
 };
+

@@ -1,9 +1,11 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../../utils/api"; 
+import useViewport from "../../hooks/useViewport";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
+  const { isMobile } = useViewport();
   const [isRegister, setIsRegister] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "" });
   const [error, setError] = useState("");
@@ -35,7 +37,7 @@ export default function AdminLogin() {
 
       localStorage.setItem("token", res.data.token);
       localStorage.setItem("admin", JSON.stringify(res.data.admin));
-      navigate("/admin");
+      navigate(res.data.admin?.is_master ? "/admin/master" : "/admin");
     } catch (err) {
       setError(err.response?.data?.message || "Cannot connect to server");
     } finally {
@@ -54,13 +56,25 @@ export default function AdminLogin() {
         <a href="/" style={s.backLink}>← Back to home</a>
 
         {/* Card */}
-        <div style={s.card}>
+        <div
+          style={{
+            ...s.card,
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+          }}
+        >
 
           {/* Left panel */}
-          <div style={s.leftPanel}>
+          <div
+            style={{
+              ...s.leftPanel,
+              padding: isMobile ? "1.5rem" : "2.5rem",
+              borderRight: isMobile ? "none" : "1px solid #1a1a1a",
+              borderBottom: isMobile ? "1px solid #1a1a1a" : "none",
+            }}
+          >
             <div style={s.logo}>
               <div style={s.logoDot} />
-              <span style={s.logoText}>QUIZLIVE</span>
+              <span style={s.logoText}>Qurio</span>
             </div>
             <h1 style={s.panelTitle}>
               Host smarter.<br />
@@ -86,7 +100,12 @@ export default function AdminLogin() {
           </div>
 
           {/* Right panel — form */}
-          <div style={s.rightPanel}>
+          <div
+            style={{
+              ...s.rightPanel,
+              padding: isMobile ? "1.5rem" : "2.5rem",
+            }}
+          >
             <div style={s.formHeader}>
               <h2 style={s.formTitle}>{isRegister ? "Create account" : "Welcome back"}</h2>
               <p style={s.formSub}>{isRegister ? "Set up your host account" : "Sign in to your host dashboard"}</p>
@@ -168,6 +187,7 @@ export default function AdminLogin() {
               Admin access only. Students join via room code on the{" "}
               <a href="/" style={s.homeLink}>home page</a>.
             </p>
+            <p style={s.secretNote}>Internal ops access uses the same sign-in form.</p>
           </div>
 
         </div>
@@ -318,6 +338,12 @@ const s = {
     fontSize: "0.72rem", color: "#555",
     textAlign: "center", lineHeight: "1.6",
     marginTop: "auto",
+  },
+  secretNote: {
+    fontSize: "0.64rem",
+    color: "#3f3f3f",
+    textAlign: "center",
+    letterSpacing: "0.03em",
   },
   homeLink: { color: "#f5a623", textDecoration: "none" },
 };

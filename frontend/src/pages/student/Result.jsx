@@ -1,13 +1,11 @@
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useEffect, useState } from "react";
-import api from "../../utils/api";
+import { useEffect } from "react";
+import RichQuestionText from "../../components/RichQuestionText";
 
 export default function Result() {
   const { quizId } = useParams();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
 
   const result = state?.result;
   const playerName = state?.playerName;
@@ -17,23 +15,14 @@ export default function Result() {
 
   useEffect(() => {
     if (!result) navigate("/");
-  }, [result]);
-
-  const fetchLeaderboard = async () => {
-    try {
-      const res = await api.get(`/attempts/leaderboard/${quizId}`);
-      setLeaderboard(res.data.leaderboard);
-      setShowLeaderboard(true);
-    } catch {
-      alert("Failed to load leaderboard");
-    }
-  };
+  }, [navigate, result]);
 
   if (!result) return null;
 
   const accuracy = Math.round(
     (result.correct_count / result.total_questions) * 100,
   );
+  const totalSeconds = Math.round((result.time_taken_ms || 0) / 1000);
   const grade =
     accuracy >= 90
       ? { label: "Outstanding!", color: "#f5a623" }
@@ -50,33 +39,26 @@ export default function Result() {
       <div style={s.grid} />
 
       <div style={s.container}>
-        {/* Header */}
         <div style={s.header}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>Qurio</span>
           </div>
           <button style={s.homeBtn} onClick={() => navigate("/")}>
             ← Home
           </button>
         </div>
 
-        {/* Result card */}
         <div style={s.resultCard}>
-          <div style={s.gradeLabel}>{grade.label}</div>
+          <div style={{ ...s.gradeLabel, color: grade.color }}>{grade.label}</div>
           <h1 style={s.quizTitle}>{quizTitle}</h1>
-          <p style={s.playerName}>👤 {playerName}</p>
+          <p style={s.playerName}>Practice summary for {playerName}</p>
 
-          {/* Score big */}
           <div style={s.scoreBig}>
             <span style={s.scoreVal}>{result.total_points}</span>
             <span style={s.scoreSub}>points</span>
           </div>
 
-          {/* Rank */}
-          <div style={s.rankBadge}>🏆 Rank #{result.final_rank}</div>
-
-          {/* Stats row */}
           <div style={s.statsRow}>
             {[
               {
@@ -86,13 +68,9 @@ export default function Result() {
               },
               { label: "Wrong", value: result.wrong_count, color: "#ef4444" },
               { label: "Accuracy", value: `${accuracy}%`, color: "#f5a623" },
-              {
-                label: "Total Qs",
-                value: result.total_questions,
-                color: "#888",
-              },
-            ].map((stat, i) => (
-              <div key={i} style={s.statItem}>
+              { label: "Time", value: `${totalSeconds}s`, color: "#888" },
+            ].map((stat) => (
+              <div key={stat.label} style={s.statItem}>
                 <span style={{ ...s.statVal, color: stat.color }}>
                   {stat.value}
                 </span>
@@ -102,7 +80,6 @@ export default function Result() {
           </div>
         </div>
 
-        {/* Answer review */}
         <div style={s.reviewSection}>
           <h2 style={s.reviewTitle}>Answer Review</h2>
           <div style={s.reviewList}>
@@ -113,7 +90,6 @@ export default function Result() {
                   ? JSON.parse(q.options)
                   : q.options
               ).sort((a, b) => a.option_number - b.option_number);
-              const correctOpt = options.find((o) => o.is_correct);
               const scoredAns = result.scored_answers?.[i];
               const isCorrect = scoredAns?.is_correct;
 
@@ -139,7 +115,7 @@ export default function Result() {
                       </span>
                     )}
                   </div>
-                  <p style={s.reviewQuestion}>{q.question_text}</p>
+                  <RichQuestionText text={q.question_text} style={s.reviewQuestion} />
                   <div style={s.reviewOptions}>
                     {options.map((opt) => (
                       <div
@@ -172,53 +148,23 @@ export default function Result() {
           </div>
         </div>
 
-        {/* Leaderboard */}
-        <div style={s.lbSection}>
-          {!showLeaderboard ? (
-            <button style={s.lbBtn} onClick={fetchLeaderboard}>
-              🏆 View Leaderboard
-            </button>
-          ) : (
-            <div style={s.lbCard}>
-              <h2 style={s.reviewTitle}>Leaderboard</h2>
-              <div style={s.lbList}>
-                {leaderboard.map((entry, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      ...s.lbRow,
-                      ...(entry.player_name === playerName
-                        ? s.lbRowHighlight
-                        : {}),
-                    }}
-                  >
-                    <span style={s.lbRank}>
-                      {i === 0
-                        ? "🥇"
-                        : i === 1
-                          ? "🥈"
-                          : i === 2
-                            ? "🥉"
-                            : `#${i + 1}`}
-                    </span>
-                    <span style={s.lbName}>{entry.player_name}</span>
-                    <span style={s.lbCorrect}>
-                      {entry.correct_count}/{result.total_questions} correct
-                    </span>
-                    <span style={s.lbPoints}>{entry.total_points} pts</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <div style={s.ctaCard}>
+          <div style={s.ctaEyebrow}>Enjoyed this pack?</div>
+          <div style={s.ctaTitle}>Want to play with your friends?</div>
+          <p style={s.ctaText}>
+            Log in as a host and start a live room for realtime questions,
+            shared tension, and a live leaderboard.
+          </p>
+          <button
+            style={s.ctaBtn}
+            onClick={() => navigate("/admin/login")}
+          >
+            Host a Live Quiz →
+          </button>
         </div>
 
-        {/* Actions */}
         <div style={s.actions}>
-          <button
-            style={s.retryBtn}
-            onClick={() => navigate(`/quiz/${quizId}`)}
-          >
+          <button style={s.retryBtn} onClick={() => navigate(`/quiz/${quizId}`)}>
             Try Again
           </button>
           <button style={s.homeActionBtn} onClick={() => navigate("/")}>
@@ -305,8 +251,6 @@ const s = {
     fontWeight: "600",
     cursor: "pointer",
   },
-
-  // Result card
   resultCard: {
     background: "#0f0f0f",
     border: "1px solid #222",
@@ -323,7 +267,6 @@ const s = {
   gradeLabel: {
     fontSize: "0.78rem",
     fontWeight: "800",
-    color: "#f5a623",
     letterSpacing: "0.1em",
     textTransform: "uppercase",
   },
@@ -348,15 +291,6 @@ const s = {
     color: "#888",
     fontWeight: "600",
     textTransform: "uppercase",
-  },
-  rankBadge: {
-    background: "rgba(245,166,35,0.1)",
-    border: "1px solid rgba(245,166,35,0.25)",
-    color: "#f5a623",
-    padding: "0.4rem 1.2rem",
-    borderRadius: "999px",
-    fontSize: "0.82rem",
-    fontWeight: "800",
   },
   statsRow: {
     display: "flex",
@@ -383,8 +317,6 @@ const s = {
     textTransform: "uppercase",
     letterSpacing: "0.08em",
   },
-
-  // Review
   reviewSection: { marginBottom: "1.5rem" },
   reviewTitle: {
     fontSize: "1rem",
@@ -467,46 +399,43 @@ const s = {
     flexShrink: 0,
   },
   reviewOptText: { flex: 1, fontSize: "0.78rem", color: "#e8e0d0" },
-
-  // Leaderboard
-  lbSection: { marginBottom: "1.5rem" },
-  lbBtn: {
-    background: "transparent",
-    border: "1px solid rgba(245,166,35,0.3)",
-    color: "#f5a623",
-    padding: "0.8rem 2rem",
-    borderRadius: "8px",
-    fontSize: "0.85rem",
-    fontWeight: "700",
-    cursor: "pointer",
-    width: "100%",
-  },
-  lbCard: {
-    background: "#0f0f0f",
-    border: "1px solid #1e1e1e",
+  ctaCard: {
+    marginBottom: "1.5rem",
+    background: "rgba(245,166,35,0.06)",
+    border: "1px solid rgba(245,166,35,0.18)",
     borderRadius: "12px",
-    padding: "1.5rem",
+    padding: "1.2rem",
   },
-  lbList: { display: "flex", flexDirection: "column", gap: "0.5rem" },
-  lbRow: {
-    display: "flex",
-    alignItems: "center",
-    gap: "1rem",
-    background: "#141414",
-    border: "1px solid #1e1e1e",
+  ctaEyebrow: {
+    fontSize: "0.68rem",
+    color: "#f5a623",
+    fontWeight: "800",
+    letterSpacing: "0.08em",
+    textTransform: "uppercase",
+  },
+  ctaTitle: {
+    marginTop: "0.45rem",
+    fontSize: "1rem",
+    fontWeight: "800",
+    color: "#f0e8d8",
+  },
+  ctaText: {
+    marginTop: "0.45rem",
+    color: "#9b9488",
+    fontSize: "0.82rem",
+    lineHeight: "1.65",
+  },
+  ctaBtn: {
+    marginTop: "0.9rem",
+    background: "transparent",
+    border: "1px solid rgba(245,166,35,0.28)",
+    color: "#f5a623",
+    padding: "0.75rem 1rem",
     borderRadius: "8px",
-    padding: "0.8rem 1rem",
+    fontSize: "0.82rem",
+    fontWeight: "800",
+    cursor: "pointer",
   },
-  lbRowHighlight: {
-    border: "1px solid rgba(245,166,35,0.3)",
-    background: "rgba(245,166,35,0.04)",
-  },
-  lbRank: { fontSize: "0.9rem", width: "28px", textAlign: "center" },
-  lbName: { flex: 1, fontSize: "0.85rem", fontWeight: "700", color: "#f0e8d8" },
-  lbCorrect: { fontSize: "0.72rem", color: "#888" },
-  lbPoints: { fontSize: "0.85rem", fontWeight: "800", color: "#f5a623" },
-
-  // Actions
   actions: { display: "flex", gap: "1rem" },
   retryBtn: {
     flex: 1,

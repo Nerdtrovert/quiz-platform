@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
-
-const SOCKET_URL =
-  import.meta.env.VITE_API_URL?.replace("/api", "") || "http://localhost:5000";
+import { SOCKET_URL } from "../../utils/runtime";
 
 export default function WaitingRoom() {
   const { roomCode } = useParams();
@@ -12,7 +10,7 @@ export default function WaitingRoom() {
   const playerName = searchParams.get("name") || "Player";
   const socketRef = useRef(null);
 
-  const [status, setStatus] = useState("connecting"); // connecting | waiting | error | kicked
+  const [status, setStatus] = useState("connecting"); // connecting | waiting | error | kicked | ended
   const [participantCount, setParticipantCount] = useState(0);
   const [participants, setParticipants] = useState([]);
 
@@ -25,12 +23,14 @@ export default function WaitingRoom() {
     });
 
     socket.on("joined-room", ({ participant_id, quiz_id }) => {
-      setStatus("waiting");
       // Store for use in quiz room
       sessionStorage.setItem("participant_id", participant_id);
-      sessionStorage.setItem("quiz_id", quiz_id);
+      if (quiz_id != null) {
+        sessionStorage.setItem("quiz_id", String(quiz_id));
+      }
       sessionStorage.setItem("player_name", playerName);
       sessionStorage.setItem("room_code", roomCode);
+      setStatus("waiting");
     });
 
     socket.on("participant-joined", ({ count, participants }) => {
@@ -42,12 +42,17 @@ export default function WaitingRoom() {
       navigate(`/quiz/live/${roomCode}`);
     });
 
+    socket.on("quiz-end", () => {
+      setStatus("ended");
+      socket.disconnect();
+    });
+
     socket.on("kicked", () => {
       setStatus("kicked");
       socket.disconnect();
     });
 
-    socket.on("error", ({ message }) => {
+    socket.on("error", () => {
       setStatus("error");
     });
 
@@ -98,6 +103,24 @@ export default function WaitingRoom() {
       </div>
     );
 
+  if (status === "ended")
+    return (
+      <div style={s.page}>
+        <div style={s.blob} />
+        <div style={s.grid} />
+        <div style={s.centered}>
+          <div style={s.card}>
+            <div style={s.errorIcon}>🏁</div>
+            <h2 style={s.cardTitle}>Room closed</h2>
+            <p style={s.cardSub}>The host ended this live room.</p>
+            <button style={s.homeBtn} onClick={() => navigate("/")}>
+              Back to Home
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+
   return (
     <div style={s.page}>
       <div style={s.blob} />
@@ -106,7 +129,7 @@ export default function WaitingRoom() {
         <div style={s.card}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>Qurio</span>
           </div>
 
           <div style={s.roomBadge}>{roomCode}</div>

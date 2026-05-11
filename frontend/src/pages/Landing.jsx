@@ -1,20 +1,198 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import api from "../utils/api";
+import useViewport from "../hooks/useViewport";
+import {
+  DoodleAtom,
+  DoodleMonitor,
+  DoodleGlobe,
+  DoodleBook,
+  DoodleController,
+  DoodlePalette,
+} from "../components/ThemeDoodles";
 
-const STATIC_QUIZZES = [
-  { id: 1, title: "Science Blast", genre: "Science", icon: "⚗️", desc: "Physics, Chemistry, Biology", difficulty: "Medium", players: "2.4k" },
-  { id: 2, title: "History Hunt", genre: "History", icon: "📜", desc: "Ancient to Modern History", difficulty: "Medium", players: "1.8k" },
-  { id: 3, title: "Tech Talk", genre: "Tech", icon: "💻", desc: "CS, Programming, AI", difficulty: "Medium", players: "3.1k" },
-  { id: 4, title: "Mixed Madness", genre: "Mixed", icon: "🎲", desc: "Everything, everywhere", difficulty: "Mixed", players: "4.2k" },
-];
+const PLACEMENT_META = {
+  "DSA Fundamentals": {
+    section: "core",
+    icon: "🔗",
+    description:
+      "Arrays, linked lists, trees, graphs, sorting, searching, time & space complexity",
+    difficultyLabel: "Hard",
+    badge: "Most asked",
+  },
+  "Operating Systems": {
+    section: "core",
+    icon: "⚙️",
+    description:
+      "Processes, threads, scheduling, memory management, deadlocks, file systems",
+    difficultyLabel: "Hard",
+  },
+  "DBMS + SQL": {
+    section: "core",
+    icon: "🗄️",
+    description:
+      "Normalization, SQL queries, transactions, ACID, indexing, joins",
+    difficultyLabel: "Medium",
+  },
+  "Python Essentials": {
+    section: "languages",
+    icon: "🐍",
+    description:
+      "OOP, list comprehensions, generators, decorators, memory model, common gotchas",
+    difficultyLabel: "Easy-Med",
+  },
+  JavaScript: {
+    section: "languages",
+    icon: "🟨",
+    description:
+      "Closures, event loop, promises/async, prototypes, hoisting, this keyword",
+    difficultyLabel: "Medium",
+  },
+  Java: {
+    section: "languages",
+    icon: "☕",
+    description:
+      "OOP, collections, JVM internals, multithreading, exception handling",
+    difficultyLabel: "Medium",
+  },
+  "C++": {
+    section: "languages",
+    icon: "💠",
+    description: "Pointers, memory management, STL, OOP, constructors, RAII",
+    difficultyLabel: "Hard",
+  },
+  C: {
+    section: "languages",
+    icon: "📟",
+    description:
+      "Pointers, arrays, strings, memory, undefined behavior, and core systems basics",
+    difficultyLabel: "Medium",
+  },
+  "Git + Dev Tools": {
+    section: "tools",
+    icon: "🛠️",
+    description:
+      "Git commands, merge vs rebase, CI/CD concepts, terminal basics",
+    difficultyLabel: "Easy",
+  },
+  "AI + Prompting": {
+    section: "tools",
+    icon: "🤖",
+    description:
+      "Prompt quality, safe AI use, hallucinations, verification, and when AI helps or hurts",
+    difficultyLabel: "Easy-Med",
+    badge: "New",
+  },
+};
+
+const GENERAL_META = {
+  "Science Blast": { icon: "⚗️", subtitle: "Physics, Chemistry, Biology" },
+  "History Hunt": { icon: "📜", subtitle: "Ancient to Modern History" },
+  "Tech Talk": { icon: "💻", subtitle: "CS, Programming, AI" },
+  "Mixed Madness": { icon: "🎲", subtitle: "Everything, everywhere" },
+};
+
+const SECTION_META = {
+  core: {
+    title: "Core Subjects",
+    eyebrow: "The essential building blocks of CS interviews",
+  },
+  languages: {
+    title: "Language Packs",
+    eyebrow: "Brush up for interview or just for the love of programming",
+  },
+  tools: {
+    title: "Tools + Workflow",
+    eyebrow: "Quick wins",
+  },
+};
+
+function normalizeQuiz(quiz) {
+  const placementMeta = PLACEMENT_META[quiz.title];
+  const generalMeta = GENERAL_META[quiz.title];
+
+  if (placementMeta) {
+    return {
+      ...quiz,
+      kind: "placement",
+      ...placementMeta,
+    };
+  }
+
+  return {
+    ...quiz,
+    kind: "general",
+    icon: generalMeta?.icon || "🧩",
+    description:
+      generalMeta?.subtitle ||
+      `${quiz.genre || "Mixed"} practice pack for quick drills`,
+    difficultyLabel:
+      quiz.difficulty === "mixed"
+        ? "Mixed"
+        : `${quiz.difficulty[0].toUpperCase()}${quiz.difficulty.slice(1)}`,
+  };
+}
+
+function difficultyStyle(label) {
+  if (label === "Hard") return s.diffHard;
+  if (label === "Medium") return s.diffMedium;
+  if (label === "Easy") return s.diffEasy;
+  return s.diffBlend;
+}
 
 export default function Landing() {
   const navigate = useNavigate();
+  const { isMobile, isTablet } = useViewport();
   const [roomCode, setRoomCode] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [step, setStep] = useState("code");
   const [error, setError] = useState("");
-  const [hoveredQuiz, setHoveredQuiz] = useState(null);
+  const [staticQuizzes, setStaticQuizzes] = useState([]);
+  const [loadingQuizzes, setLoadingQuizzes] = useState(true);
+
+  useEffect(() => {
+    const loadStaticQuizzes = async () => {
+      try {
+        const res = await api.get("/quizzes/static");
+        setStaticQuizzes((res.data.quizzes || []).map(normalizeQuiz));
+      } catch (err) {
+        console.error("Failed to load static quizzes", err);
+      } finally {
+        setLoadingQuizzes(false);
+      }
+    };
+
+    loadStaticQuizzes();
+  }, []);
+
+  const placementSections = useMemo(() => {
+    const grouped = { core: [], languages: [], tools: [] };
+
+    staticQuizzes
+      .filter((quiz) => quiz.kind === "placement")
+      .forEach((quiz) => {
+        grouped[quiz.section].push(quiz);
+      });
+
+    return grouped;
+  }, [staticQuizzes]);
+
+  const generalQuizzes = useMemo(
+    () => staticQuizzes.filter((quiz) => quiz.kind === "general"),
+    [staticQuizzes],
+  );
+
+  const placementCount = Object.values(placementSections).reduce(
+    (total, section) => total + section.length,
+    0,
+  );
+
+  const handleMouseMove = (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5) * 2;
+    const y = (e.clientY / window.innerHeight - 0.5) * 2;
+    document.documentElement.style.setProperty("--mouse-x", x);
+    document.documentElement.style.setProperty("--mouse-y", y);
+  };
 
   const handleCodeSubmit = () => {
     if (roomCode.trim().length !== 6) {
@@ -31,29 +209,56 @@ export default function Landing() {
       return;
     }
     setError("");
-    navigate(`/waiting/${roomCode}?name=${encodeURIComponent(playerName)}`);
+    navigate(
+      `/waiting/${roomCode.trim()}?name=${encodeURIComponent(playerName.trim())}`,
+    );
   };
 
   return (
-    <div style={s.page}>
+    <div style={s.page} onMouseMove={handleMouseMove}>
       <div style={s.blob1} />
       <div style={s.blob2} />
       <div style={s.grid} />
 
-      <div style={s.container}>
-        {/* Header */}
-        <header style={s.header}>
-          <div style={s.logo}>
-            <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
-          </div>
+      <DoodleAtom style={{ top: "10%", left: "6%" }} />
+      <DoodleMonitor style={{ top: "9%", right: "8%" }} />
+      <DoodleGlobe style={{ top: "24%", left: "2%" }} />
+      <DoodleBook style={{ top: "30%", right: "4%" }} />
+      <DoodleController style={{ top: "31%", left: "15%" }} />
+      <DoodlePalette style={{ top: "21%", right: "16%" }} />
+
+      <div
+        style={{
+          ...s.container,
+          padding: isMobile ? "0 1rem" : "0 2.5rem",
+        }}
+      >
+        <header
+          style={{
+            ...s.header,
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: isMobile ? "flex-start" : "center",
+            gap: isMobile ? "1rem" : 0,
+          }}
+        >
+          <a href="/" style={s.logoLink}>
+            <div style={s.logo}>
+              <div style={s.logoIconWrap}>
+                <img
+                  src="/favicon-32x32.png"
+                  alt="Qurio logo"
+                  style={s.logoIcon}
+                />
+              </div>
+              <span style={s.logoText}>Qurio</span>
+            </div>
+          </a>
           <a href="/admin/login" style={s.hostLink}>
             Host a Quiz →
           </a>
         </header>
 
-        {/* Hero */}
-        <section style={s.hero}>
+        <section style={{ ...s.hero, marginBottom: isMobile ? "2rem" : "3rem" }}>
           <div style={s.heroBadge}>
             <span style={s.badgeDot} />
             Live &amp; Static Quizzes
@@ -63,16 +268,27 @@ export default function Landing() {
             <br />
             <span style={s.heroAccent}>Beat the clock.</span>
           </h1>
-          <p style={s.heroSub}>
-            Join a live quiz with a room code, or try one of our curated quizzes
-            anytime — no signup needed.
+          <p style={{ ...s.heroSub, fontSize: isMobile ? "0.88rem" : "0.95rem" }}>
+            Join a live quiz with a room code, or explore our new placement prep
+            packs with fresh balanced questions on every attempt.
           </p>
         </section>
 
-        {/* Main Grid */}
-        <div className="main-grid" style={s.mainGrid}>
-          {/* Join Card */}
-          <div style={s.joinCard}>
+        <div
+          style={{
+            ...s.mainGrid,
+            gridTemplateColumns: isTablet ? "1fr" : "460px minmax(0, 1fr)",
+            gap: isMobile ? "1rem" : "1.5rem",
+          }}
+        >
+          <div
+            style={{
+              ...s.joinCard,
+              maxWidth: isTablet ? "100%" : "420px",
+              minHeight: isMobile ? "auto" : "342px",
+              padding: isMobile ? "1.25rem" : "1.8rem",
+            }}
+          >
             <div style={s.joinHeader}>
               <div style={s.joinIcon}>⚡</div>
               <div>
@@ -166,60 +382,104 @@ export default function Landing() {
             </div>
           </div>
 
-          {/* Static Quizzes */}
           <div style={s.staticSection}>
-            <div style={s.staticHeader}>
-              <h2 style={s.staticTitle}>Try a Quiz</h2>
-              <span style={s.noSignupTag}>No signup needed</span>
+            <div
+              style={{
+                ...s.staticHeader,
+                flexDirection: isMobile ? "column" : "row",
+                alignItems: isMobile ? "flex-start" : "center",
+              }}
+            >
+              <h2 style={s.staticTitle}>Placement Prep</h2>
+              <span style={s.noSignupTag}>NEW</span>
+              <span style={s.staticMeta}>{placementCount || 8} packs</span>
             </div>
-            <div className="quiz-grid" style={s.quizGrid}>
-              {STATIC_QUIZZES.map((q) => (
-                <div
-                  key={q.id}
-                  style={{
-                    ...s.quizCard,
-                    ...(hoveredQuiz === q.id ? s.quizCardHover : {}),
-                  }}
-                  onMouseEnter={() => setHoveredQuiz(q.id)}
-                  onMouseLeave={() => setHoveredQuiz(null)}
-                  onClick={() => navigate(`/quiz/${q.id}`)}
-                >
-                  <div style={s.quizTop}>
-                    <span style={s.quizIcon}>{q.icon}</span>
-                    <span style={s.quizDiff}>{q.difficulty}</span>
+
+            <p style={s.sectionCopy}>
+              Each pack is designed to brush up fundamental skills quickly.
+            </p>
+
+            {loadingQuizzes ? (
+              <div style={s.emptyState}>Loading quiz packs...</div>
+            ) : (
+              Object.entries(SECTION_META).map(([sectionKey, meta]) =>
+                placementSections[sectionKey].length ? (
+                  <div key={sectionKey} style={s.subSection}>
+                    <div style={s.subHeader}>
+                      <span style={s.subTitle}>
+                        {meta.title.toUpperCase()}{" "}
+                        <span style={s.subEyebrow}>— {meta.eyebrow}</span>
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        ...s.quizGrid,
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : "repeat(3, minmax(0, 1fr))",
+                      }}
+                    >
+                      {placementSections[sectionKey].map((quiz) => (
+                        <div
+                          key={quiz.quiz_id}
+                          style={s.quizCard}
+                          onClick={() => navigate(`/quiz/${quiz.quiz_id}`)}
+                        >
+                          <div style={s.quizTop}>
+                            <span style={s.quizIcon}>{quiz.icon}</span>
+                          </div>
+                          <h3 style={s.quizName}>{quiz.title}</h3>
+                          <p style={s.quizDesc}>{quiz.description}</p>
+                          <div style={s.chipRow}>
+                            <span style={s.countChip}>{quiz.num_questions} Qs</span>
+                            <span
+                              style={{
+                                ...s.diffChip,
+                                ...difficultyStyle(quiz.difficultyLabel),
+                              }}
+                            >
+                              {quiz.difficultyLabel}
+                            </span>
+                            {quiz.badge ? (
+                              <span style={s.badgeChip}>{quiz.badge}</span>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <h3 style={s.quizName}>{q.title}</h3>
-                  <p style={s.quizDesc}>{q.desc}</p>
-                  <div style={s.quizFooter}>
-                    <span style={s.quizPlayers}>👥 {q.players} played</span>
-                    <span style={s.quizPlay}>Play →</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+                ) : null,
+              )
+            )}
           </div>
         </div>
 
-        {/* Stats bar */}
-        <div className="stats-bar" style={s.statsBar}>
-          {[
-            { label: "Questions", value: "500+" },
-            { label: "Genres", value: "4" },
-            { label: "Players Today", value: "1.2k" },
-            { label: "Avg Score", value: "72%" },
-          ].map((stat, i) => (
-            <div
-              key={i}
-              className="stat-item"
-              style={{
-                ...s.statItem,
-                ...(i === 3 ? { borderRight: "none" } : {}),
-              }}
-            >
-              <span style={s.statVal}>{stat.value}</span>
-              <span style={s.statLabel}>{stat.label}</span>
-            </div>
-          ))}
+        <div style={s.generalSection}>
+          <div style={s.generalHeader}>
+            <h2 style={s.staticTitle}>General Quizzes</h2>
+            <span style={s.staticMeta}>Quick casual practice packs</span>
+          </div>
+          <div
+            style={{
+              ...s.generalGrid,
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+            }}
+          >
+            {generalQuizzes.map((quiz) => (
+              <div
+                key={quiz.quiz_id}
+                style={s.generalCard}
+                onClick={() => navigate(`/quiz/${quiz.quiz_id}`)}
+              >
+                <div style={s.generalCardTop}>
+                  <span style={s.quizIcon}>{quiz.icon}</span>
+                  <span style={s.generalCount}>{quiz.num_questions} Qs</span>
+                </div>
+                <h3 style={s.quizName}>{quiz.title}</h3>
+                <p style={s.quizDesc}>{quiz.description}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
@@ -234,6 +494,8 @@ const s = {
     fontFamily: "'DM Sans', 'Segoe UI', sans-serif",
     position: "relative",
     overflow: "hidden",
+    display: "flex",
+    flexDirection: "column",
   },
   blob1: {
     position: "fixed",
@@ -245,6 +507,7 @@ const s = {
     background:
       "radial-gradient(circle, rgba(245,166,35,0.07) 0%, transparent 70%)",
     pointerEvents: "none",
+    animation: "floatOrb1 12s ease-in-out infinite",
   },
   blob2: {
     position: "fixed",
@@ -256,21 +519,27 @@ const s = {
     background:
       "radial-gradient(circle, rgba(245,166,35,0.04) 0%, transparent 70%)",
     pointerEvents: "none",
+    animation: "floatOrb2 15s ease-in-out infinite",
   },
   grid: {
     position: "fixed",
     inset: 0,
-    backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
+    backgroundImage:
+      "linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)",
     backgroundSize: "48px 48px",
     pointerEvents: "none",
+    animation: "scrollGrid 20s linear infinite",
   },
   container: {
-    maxWidth: "1200px",
+    maxWidth: "1480px",
+    width: "100%",
     margin: "0 auto",
     padding: "0 2rem",
     position: "relative",
     zIndex: 1,
+    display: "flex",
+    flexDirection: "column",
+    flex: 1,
   },
   header: {
     display: "flex",
@@ -280,14 +549,22 @@ const s = {
     borderBottom: "1px solid rgba(255,255,255,0.04)",
     marginBottom: "3rem",
   },
-  logo: { display: "flex", alignItems: "center", gap: "0.6rem" },
-  logoDot: {
-    width: "9px",
-    height: "9px",
-    borderRadius: "50%",
-    background: "#f5a623",
-    boxShadow: "0 0 10px rgba(245,166,35,0.7)",
+  logoLink: {
+    textDecoration: "none",
+    color: "inherit",
   },
+  logo: { display: "flex", alignItems: "center", gap: "0.6rem" },
+  logoIconWrap: {
+    width: "18px",
+    height: "18px",
+    borderRadius: "6px",
+    overflow: "hidden",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    boxShadow: "0 0 10px rgba(245,166,35,0.18)",
+  },
+  logoIcon: { width: "100%", height: "100%", display: "block" },
   logoText: {
     fontSize: "0.85rem",
     fontWeight: "800",
@@ -334,7 +611,7 @@ const s = {
   heroSub: {
     color: "#999",
     fontSize: "0.95rem",
-    maxWidth: "460px",
+    maxWidth: "560px",
     margin: "0 auto",
     lineHeight: "1.7",
   },
@@ -344,23 +621,21 @@ const s = {
     gap: "1.5rem",
     marginBottom: "2rem",
     alignItems: "start",
-    // add this:
-    "@media (max-width: 768px)": {
-      gridTemplateColumns: "1fr",
-    },
   },
   joinCard: {
-    background: "#0f0f0f",
+    background: "rgba(15, 15, 15, 0.7)",
+    backdropFilter: "blur(12px)",
+    WebkitBackdropFilter: "blur(12px)",
     border: "1px solid #222",
     borderRadius: "14px",
     padding: "1.8rem",
     boxShadow: "0 0 40px rgba(245,166,35,0.03)",
     display: "flex",
     flexDirection: "column",
-    justifyContent: "space-between", 
+    justifyContent: "space-between",
     width: "100%",
     maxWidth: "420px",
-    minHeight: "342px", 
+    minHeight: "342px",
   },
   joinHeader: {
     display: "flex",
@@ -511,21 +786,40 @@ const s = {
     borderRadius: "999px",
     letterSpacing: "0.04em",
   },
+  staticMeta: { fontSize: "0.72rem", color: "#777", fontWeight: "600" },
+  sectionCopy: {
+    fontSize: "0.78rem",
+    color: "#8c8c8c",
+    lineHeight: "1.6",
+    margin: 0,
+  },
+  subSection: { display: "flex", flexDirection: "column", gap: "0.65rem" },
+  subHeader: {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  subTitle: {
+    fontSize: "0.8rem",
+    color: "#c8b9a3",
+    fontWeight: "800",
+    letterSpacing: "0.08em",
+  },
+  subEyebrow: {
+    color: "#7b7368",
+    fontWeight: "600",
+  },
   quizGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" },
   quizCard: {
-    background: "#161616",
+    background: "rgba(22, 22, 22, 0.6)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
     border: "1px solid #2a2a2a",
     borderRadius: "12px",
     padding: "1.1rem",
     cursor: "pointer",
     transition: "all 0.2s",
     boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
-  },
-  quizCardHover: {
-    border: "1px solid rgba(245,166,35,0.4)",
-    background: "#1c1c1c",
-    transform: "translateY(-2px)",
-    boxShadow: "0 8px 24px rgba(245,166,35,0.1)",
   },
   quizTop: {
     display: "flex",
@@ -534,21 +828,11 @@ const s = {
     marginBottom: "0.6rem",
   },
   quizIcon: { fontSize: "1.3rem" },
-  quizDiff: {
-    fontSize: "0.62rem",
-    color: "#f5a623",
-    background: "rgba(245,166,35,0.1)",
-    border: "1px solid rgba(245,166,35,0.2)",
-    padding: "0.12rem 0.4rem",
-    borderRadius: "4px",
-    fontWeight: "700",
-    letterSpacing: "0.04em",
-  },
   quizName: {
-    fontSize: "0.88rem",
+    fontSize: "0.96rem",
     fontWeight: "700",
     color: "#f0e8d8",
-    marginBottom: "0.3rem",
+    marginBottom: "0.35rem",
   },
   quizDesc: {
     fontSize: "0.75rem",
@@ -556,42 +840,87 @@ const s = {
     marginBottom: "0.8rem",
     lineHeight: "1.5",
   },
-  quizFooter: {
+  chipRow: {
     display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
+    gap: "0.45rem",
+    flexWrap: "wrap",
   },
-  quizPlayers: { fontSize: "0.66rem", color: "#777" },
-  quizPlay: { fontSize: "0.72rem", color: "#f5a623", fontWeight: "700" },
-  statsBar: {
-    display: "flex",
-    justifyContent: "center",
-    background: "#0f0f0f",
-    border: "1px solid #1e1e1e",
-    borderRadius: "12px",
-    padding: "1.2rem 2rem",
-    marginBottom: "2rem",
+  countChip: {
+    fontSize: "0.68rem",
+    color: "#8b560f",
+    background: "#ffe2b0",
+    padding: "0.18rem 0.5rem",
+    borderRadius: "6px",
+    fontWeight: "700",
   },
-  statItem: {
+  diffChip: {
+    fontSize: "0.68rem",
+    padding: "0.18rem 0.5rem",
+    borderRadius: "6px",
+    fontWeight: "700",
+  },
+  diffHard: {
+    background: "#ffe1e1",
+    color: "#962626",
+  },
+  diffMedium: {
+    background: "#ffe9c9",
+    color: "#8a5a11",
+  },
+  diffEasy: {
+    background: "#dff3d1",
+    color: "#3e6b17",
+  },
+  diffBlend: {
+    background: "#dff3d1",
+    color: "#436a25",
+  },
+  badgeChip: {
+    fontSize: "0.68rem",
+    background: "#232323",
+    color: "#c8c8c8",
+    padding: "0.18rem 0.5rem",
+    borderRadius: "6px",
+    fontWeight: "700",
+  },
+  generalSection: {
     display: "flex",
     flexDirection: "column",
+    gap: "0.9rem",
+    marginTop: "1rem",
+    marginBottom: "2.5rem",
+  },
+  generalHeader: {
+    display: "flex",
     alignItems: "center",
-    gap: "0.2rem",
-    flex: 1,
-    borderRight: "1px solid #1e1e1e",
-    padding: "0 1.5rem",
+    gap: "0.8rem",
+    flexWrap: "wrap",
   },
-  statVal: {
-    fontSize: "1.4rem",
-    fontWeight: "800",
-    color: "#f0e8d8",
-    letterSpacing: "-0.02em",
+  generalGrid: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.8rem" },
+  generalCard: {
+    background: "rgba(22, 22, 22, 0.6)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    border: "1px solid #2a2a2a",
+    borderRadius: "12px",
+    padding: "1.1rem",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
   },
-  statLabel: {
-    fontSize: "0.67rem",
-    color: "#888",
-    textTransform: "uppercase",
-    letterSpacing: "0.1em",
-    fontWeight: "600",
+  generalCardTop: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "0.6rem",
+  },
+  generalCount: { fontSize: "0.72rem", color: "#999", fontWeight: "700" },
+  emptyState: {
+    background: "rgba(22, 22, 22, 0.6)",
+    border: "1px solid #2a2a2a",
+    borderRadius: "12px",
+    padding: "1rem",
+    color: "#8f8f8f",
+    fontSize: "0.82rem",
   },
 };

@@ -1,6 +1,33 @@
 const pool = require("../config/db");
 
-// ─── GET ALL QUIZZES FOR ADMIN (for Live Room selector) ───
+function shuffle(array) {
+  const copy = [...array];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function selectStaticQuestionSet(questions, targetCount) {
+  const easy = questions.filter((question) => question.difficulty === "easy");
+  const medium = questions.filter(
+    (question) => question.difficulty === "medium",
+  );
+  const hard = questions.filter((question) => question.difficulty === "hard");
+
+  if (easy.length >= 5 && medium.length >= 5 && hard.length >= 5) {
+    return [
+      ...shuffle(easy).slice(0, 5),
+      ...shuffle(medium).slice(0, 5),
+      ...shuffle(hard).slice(0, 5),
+    ];
+  }
+
+  return shuffle(questions).slice(0, targetCount);
+}
+
+// ─── GET ALL QUIZZES FOR ADMIN (own + static presets) ────
 exports.getQuizzes = async (req, res) => {
   const admin_id = req.user.admin_id;
   try {
@@ -12,7 +39,17 @@ exports.getQuizzes = async (req, res) => {
        ORDER BY q.created_at DESC`,
       [admin_id],
     );
-    res.json({ quizzes });
+
+    // Also fetch static preset quizzes (admin_id=1, is_static=1)
+    const [staticQuizzes] = await pool.query(
+      `SELECT q.*,
+        (SELECT COUNT(*) FROM QuizQuestions qq WHERE qq.quiz_id = q.quiz_id) AS question_count
+       FROM Quizzes q
+       WHERE q.is_static = 1
+       ORDER BY q.quiz_id ASC`,
+    );
+
+    res.json({ quizzes, staticQuizzes });
   } catch (err) {
     console.error("GetQuizzes error:", err);
     res.status(500).json({ message: "Server error" });
@@ -30,7 +67,9 @@ exports.getQuizById = async (req, res) => {
     if (quizRows.length === 0)
       return res.status(404).json({ message: "Quiz not found" });
 
-    const [questions] = await pool.query(
+    const quiz = quizRows[0];
+
+    const [questionRows] = await pool.query(
       `SELECT qb.*, qq.order_index,
         JSON_ARRAYAGG(
           JSON_OBJECT(
@@ -49,7 +88,12 @@ exports.getQuizById = async (req, res) => {
       [id],
     );
 
-    res.json({ quiz: quizRows[0], questions });
+    const questions =
+      quiz.is_static === 1
+        ? selectStaticQuestionSet(questionRows, Number(quiz.num_questions) || 15)
+        : shuffle(questionRows);
+
+    res.json({ quiz, questions });
   } catch (err) {
     console.error("GetQuizById error:", err);
     res.status(500).json({ message: "Server error" });
@@ -77,8 +121,8 @@ exports.createQuiz = async (req, res) => {
       [
         admin_id,
         title,
-        genre || "mixed",
-        (difficulty || "mixed").toLowerCase(),
+        genre || "Mixed",
+        difficulty || "medium",
         question_ids.length,
         time_per_question || 30,
       ],

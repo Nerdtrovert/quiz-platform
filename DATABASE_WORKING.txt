@@ -1,0 +1,378 @@
+QUIZ PLATFORM - DATABASE WORKING NOTES
+======================================
+
+1. Database Used
+The project uses MySQL.
+The active schema for the app is:
+- database/schema.sql
+
+Important:
+- backend/db/schema.sql is an older schema and should not be used for the current app flow
+- database/schema.sql is the correct one for this project
+
+
+2. Core Database Idea
+The database is designed around two separate quiz modes:
+
+- Static quiz mode
+  Stores full solo attempts in StaticAttempts
+
+- Live quiz mode
+  Stores room lifecycle in Rooms
+  Stores players in Participants
+  Stores per-question submissions in Responses
+  Stores final room results in Scores
+
+This separation is a strong decision because static and live quiz behavior are very different.
+
+
+3. Main Tables and Their Roles
+
+3.1 Admins
+Stores host/admin accounts.
+Used for:
+- standard admin registration/login
+- quiz ownership
+- room ownership
+
+Main fields:
+- admin_id
+- name
+- email
+- password_hash
+
+
+3.2 QuestionBank
+Stores reusable questions created by admins or seeded by system admin.
+
+Important fields:
+- question_id
+- admin_id
+- question_text
+- genre
+- difficulty
+- base_points
+
+Why important:
+- questions are not tied to a single quiz
+- they can be reused across multiple quizzes
+
+
+3.3 Options
+Stores the answer options for each question.
+
+Important fields:
+- option_id
+- question_id
+- option_number
+- option_text
+- is_correct
+
+Important rule:
+- each question can have 4 options
+- option_number is unique per question
+
+
+3.4 Quizzes
+Stores quiz definitions.
+
+Important fields:
+- quiz_id
+- admin_id
+- title
+- genre
+- difficulty
+- num_questions
+- time_per_question
+- is_static
+
+Important design decision:
+- both static preset quizzes and user-created quizzes live in the same table
+- is_static distinguishes them
+
+
+3.5 QuizQuestions
+Bridge table between Quizzes and QuestionBank.
+
+Important fields:
+- id
+- quiz_id
+- question_id
+- order_index
+
+Why needed:
+- allows many questions per quiz
+- allows one question to appear in multiple quizzes
+- preserves exact order in a quiz
+
+
+3.6 StaticAttempts
+Stores solo quiz attempts.
+
+Important fields:
+- attempt_id
+- quiz_id
+- player_name
+- total_points
+- correct_count
+- wrong_count
+- time_taken_ms
+- final_rank
+
+Why separate:
+- static quizzes do not use rooms or accounts
+- final result is computed at submission time
+
+
+3.7 Rooms
+Stores live quiz sessions.
+
+Important fields:
+- room_id
+- quiz_id
+- admin_id
+- room_code
+- status
+- current_question_index
+- started_at
+- ended_at
+
+Why important:
+- this is the central live-quiz session table
+- room_code is what students use to join
+- current_question_index supports live progress recovery
+
+
+3.8 Participants
+Stores players inside live rooms.
+
+Important fields:
+- participant_id
+- room_id
+- name
+- is_active
+- streak
+- multiplier
+
+Why important:
+- tracks live scoring state
+- links each user to a live room
+
+
+3.9 Responses
+Stores one submitted answer per participant per live question.
+
+Important fields:
+- response_id
+- participant_id
+- question_id
+- room_id
+- selected_option
+- is_correct
+- response_time_ms
+- points_earned
+
+Why important:
+- this is the detailed event history of a live quiz
+- needed for final scoring and room recovery
+
+
+3.10 Scores
+Stores final live room result summaries.
+
+Important fields:
+- score_id
+- participant_id
+- room_id
+- total_points
+- correct_count
+- wrong_count
+- highest_streak
+- final_rank
+
+Why separate from Responses:
+- Responses are event-level
+- Scores are final summary-level
+
+
+4. Main Relationships
+
+Admins -> QuestionBank
+- one admin can create many questions
+
+Admins -> Quizzes
+- one admin can create many quizzes
+
+Admins -> Rooms
+- one admin can host many rooms
+
+Quizzes -> QuizQuestions -> QuestionBank
+- quizzes are made by selecting reusable questions
+
+QuestionBank -> Options
+- each question has options
+
+Quizzes -> StaticAttempts
+- static attempt belongs to one quiz
+
+Rooms -> Participants
+- each live room has many participants
+
+Participants -> Responses
+- each participant submits multiple live answers
+
+Participants -> Scores
+- each participant gets one final score summary per room
+
+
+5. How Static Quiz Data Works
+
+Step 1
+Frontend fetches quiz and questions from:
+- GET /api/quizzes/:id
+
+Step 2
+User completes quiz in frontend.
+
+Step 3
+Frontend submits to:
+- POST /api/attempts
+
+Step 4
+Backend:
+- fetches quiz questions
+- checks correct options
+- applies scoring logic
+- inserts a row into StaticAttempts
+- calculates rank
+
+Step 5
+Frontend navigates to result page using returned result data.
+
+
+6. How Live Quiz Data Works
+
+Step 1: Room creation
+- Host creates a room through Socket.IO
+- Backend inserts a row into Rooms
+
+Step 2: Participant join
+- Student joins with room code
+- Backend inserts a row into Participants
+
+Step 3: Quiz start
+- Host starts quiz
+- Backend loads quiz questions from QuizQuestions + QuestionBank + Options
+- Room status becomes active
+
+Step 4: Live answering
+- Student submits answer via socket
+- Backend scores answer
+- Backend inserts row into Responses
+- Backend updates in-memory participant score/streak
+
+Step 5: Progress persistence
+- current_question_index and pause state are written back into Rooms
+- this helps room recovery
+
+Step 6: Quiz end
+- Backend updates Rooms to ended
+- Backend aggregates Responses
+- Backend inserts or updates final rows in Scores
+- Final leaderboard is broadcast
+
+
+7. Recovery Logic
+One of the most important database decisions now implemented:
+- live rooms can be rebuilt from DB if they are missing in memory
+
+The rehydration logic uses:
+- Rooms for room state
+- Quizzes for timer settings
+- Participants for room members
+- Responses for current scores and answered state
+- QuizQuestions + QuestionBank + Options for question payload
+
+This is especially useful if:
+- host refreshes page
+- room state is lost from process memory but DB still has session records
+
+
+8. Seed Data Logic
+Seed file:
+- database/seed.sql
+
+What it does:
+- clears current data
+- resets AUTO_INCREMENT values
+- inserts a system admin
+- inserts 80 seeded questions
+- inserts options for all seeded questions
+- inserts 4 static preset quizzes
+- maps quiz questions to each preset quiz
+
+Important design detail:
+- IDs are inserted explicitly so question-option and quiz-question mapping stay stable
+
+
+9. Important Constraints and Rules
+
+time_per_question
+- must be one of: 10, 20, 30, 60
+
+difficulty
+- question difficulty: easy, medium, hard
+- quiz difficulty: easy, medium, hard, mixed
+
+unique option ordering
+- each question must have unique option_number values
+
+unique question position in quiz
+- QuizQuestions enforces unique order_index inside each quiz
+
+one final score per participant
+- Scores has unique participant_id
+
+one response per participant per question
+- Responses enforces unique participant_id + question_id
+
+
+10. Useful Backend Files for DB Work
+- backend/config/db.js
+  MySQL connection pool
+- backend/controllers/auth.controller.js
+  Admin table reads/writes
+- backend/controllers/question.controller.js
+  QuestionBank and Options operations
+- backend/controllers/exam.controller.js
+  Quizzes and QuizQuestions operations
+- backend/controllers/attempt.controller.js
+  StaticAttempts operations
+- backend/controllers/admin.controller.js
+  Admin stats, static attempt moderation, room history queries
+- backend/socket.js
+  Live room DB reads/writes for Rooms, Participants, Responses, Scores
+
+
+11. Current Database Risks / Notes
+- There are two schema files in the repo, but only database/schema.sql matches the live application
+- Some legacy score routes exist in code but are not fully implemented
+- Live room memory state still exists alongside DB state, so both must remain in sync
+
+
+12. Recommended DB Setup Order
+1. Run database/schema.sql
+2. Run database/seed.sql
+3. Confirm DB_NAME in backend/.env points to quiz_platform
+4. Start backend
+5. Start frontend
+
+
+13. Short Summary
+The database is designed well for this kind of product because it:
+- separates static and live quiz storage cleanly
+- supports reusable questions
+- supports ordered quiz composition
+- supports live-room recovery
+- stores both event-level and summary-level data for live quizzes
+

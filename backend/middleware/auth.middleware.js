@@ -14,3 +14,10 @@ exports.verifyToken = (req, res, next) => {
     return res.status(401).json({ message: "Invalid or expired token" });
   }
 };
+
+exports.requireMasterAdmin = (req, res, next) => {
+  if (!req.user?.is_master) {
+    return res.status(403).json({ message: "Master admin access required" });
+  }
+  next();
+};

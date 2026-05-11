@@ -4,6 +4,7 @@ import api from "../../utils/api";
 
 const GENRES = ["Science", "History", "Tech", "Mixed", "Math", "General"];
 const DIFFICULTIES = ["easy", "medium", "hard"];
+const TIME_OPTIONS = [10, 20, 30, 60];
 
 export default function CreateQuiz() {
   const navigate = useNavigate();
@@ -88,19 +89,19 @@ export default function CreateQuiz() {
         <div style={s.sidebarTop}>
           <div style={s.logo}>
             <div style={s.logoDot} />
-            <span style={s.logoText}>QUIZLIVE</span>
+            <span style={s.logoText}>Qurio</span>
           </div>
           <nav style={s.nav}>
             {[
               { icon: "⚡", label: "Dashboard", path: "/admin" },
               { icon: "🗃", label: "Question Bank", path: "/admin/questions" },
-              { icon: "📝", label: "My Quizzes", path: "/admin/create-quiz" },
               {
-                icon: "🚀",
+                icon: "📝",
                 label: "Create Quiz",
                 path: "/admin/create-quiz",
                 active: true,
               },
+              { icon: "🚀", label: "Start Room", path: "/admin/live" },
             ].map((item) => (
               <button
                 key={item.path}
@@ -202,19 +203,19 @@ export default function CreateQuiz() {
                 <label style={s.label}>
                   TIME PER QUESTION — {timePerQuestion}s
                 </label>
-                <select
-                  value={timePerQuestion}
-                  onChange={(e) => setTimePerQuestion(parseInt(e.target.value))}
-                  style={s.select}
-                >
-                  <option value={10}>10s</option>
-                  <option value={20}>20s</option>
-                  <option value={30}>30s</option>
-                  <option value={60}>60s</option>
-                </select>
-                <div style={s.sliderLabels}>
-                  <span>10s</span>
-                  <span>60s</span>
+                <div style={s.diffRow}>
+                  {TIME_OPTIONS.map((time) => (
+                    <button
+                      key={time}
+                      style={{
+                        ...s.diffBtn,
+                        ...(timePerQuestion === time ? s.diffBtnActive : {}),
+                      }}
+                      onClick={() => setTimePerQuestion(time)}
+                    >
+                      {time}s
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
@@ -557,13 +558,6 @@ const s = {
     background: "rgba(245,166,35,0.15)",
     border: "1px solid rgba(245,166,35,0.4)",
     color: "#f5a623",
-  },
-  slider: { width: "100%", accentColor: "#f5a623" },
-  sliderLabels: {
-    display: "flex",
-    justifyContent: "space-between",
-    fontSize: "0.65rem",
-    color: "#666",
   },
   emptyNote: {
     fontSize: "0.78rem",
