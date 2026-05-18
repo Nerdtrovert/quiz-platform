@@ -5,7 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "check": "node -e \"require('dotenv').config(); const r=['DB_HOST','DB_USER','DB_NAME','JWT_SECRET']; const m=r.filter(k=>!process.env[k]); if(m.length){ console.error('Missing env:',m.join(', ')); process.exit(1); } const pool=require('./config/db'); pool.query('SELECT 1').then(()=>{ console.log('Backend check OK (env + DB)'); process.exit(0); }).catch(e=>{ console.error('DB check failed:', e.message); process.exit(1); });\""
+    "check": "node -e \"require('dotenv').config(); const required=['JWT_SECRET']; const missing=[]; const hasDb = !!process.env.DATABASE_URL || (process.env.DB_HOST && process.env.DB_USER && process.env.DB_PASSWORD && process.env.DB_NAME); if(!hasDb) missing.push('DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME'); missing.push(...required.filter(k=>!process.env[k])); if(missing.length){ console.error('Missing env:', missing.join(', ')); process.exit(1); } const pool=require('./config/db'); pool.query('SELECT 1').then(()=>{ console.log('Backend check OK (env + DB)'); process.exit(0); }).catch(e=>{ console.error('DB check failed:', e.message); process.exit(1); });\""
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

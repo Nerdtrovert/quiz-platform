@@ -388,7 +388,7 @@ exports.createStaticQuiz = async (req, res) => {
     for (let i = 0; i < question_ids.length; i++) {
       await conn.query(
         "INSERT INTO QuizQuestions (quiz_id, question_id, order_index) VALUES (?, ?, ?)",
-        [quiz_id, question_ids[i], i],
+        [quiz_id, question_ids[i], i + 1],
       );
     }
 
@@ -448,7 +448,7 @@ exports.updateStaticQuiz = async (req, res) => {
       for (let i = 0; i < question_ids.length; i++) {
         await conn.query(
           "INSERT INTO QuizQuestions (quiz_id, question_id, order_index) VALUES (?, ?, ?)",
-          [quizId, question_ids[i], i],
+          [quizId, question_ids[i], i + 1],
         );
       }
     }
