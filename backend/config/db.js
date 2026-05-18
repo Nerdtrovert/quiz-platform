@@ -16,10 +16,10 @@ if (process.env.DATABASE_URL) {
     dbConfig.password = decodeURIComponent(url.password);
     dbConfig.database = url.pathname ? url.pathname.replace(/^\//, '') : undefined;
 
-    // Support a query param like ?ssl=true or ?sslmode=require
-    const sslParam = url.searchParams.get('ssl') || url.searchParams.get('sslmode');
-    if (sslParam && (sslParam === 'true' || sslParam === 'require' || sslParam === '1')) {
-      dbConfig.ssl = { rejectUnauthorized: true };
+    // Support a query param like ?ssl=true or ?ssl-mode=REQUIRED
+    const sslParam = url.searchParams.get('ssl') || url.searchParams.get('sslmode') || url.searchParams.get('ssl-mode');
+    if (sslParam && ['true', 'require', 'required', '1'].includes(sslParam.toLowerCase())) {
+      dbConfig.ssl = { rejectUnauthorized: false };
     }
   } catch (e) {
     console.error('Invalid DATABASE_URL:', e.message);
@@ -33,6 +33,11 @@ if (!dbConfig.host) {
   dbConfig.user = process.env.DB_USER;
   dbConfig.password = process.env.DB_PASSWORD;
   dbConfig.database = process.env.DB_NAME;
+}
+
+// Enable SSL if DB_SSL is set to true, or if connecting to an Aiven database
+if (process.env.DB_SSL === 'true' || (dbConfig.host && dbConfig.host.includes('aivencloud.com'))) {
+  dbConfig.ssl = { rejectUnauthorized: false };
 }
 
 const pool = mysql.createPool(dbConfig);
