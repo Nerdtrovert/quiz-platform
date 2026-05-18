@@ -4,8 +4,23 @@ const http = require("http");
 const { Server } = require("socket.io");
 require("dotenv").config();
 
-const required = ["DB_HOST", "DB_USER", "DB_NAME", "JWT_SECRET"];
-const missing = required.filter((k) => !process.env[k]);
+const missing = [];
+const hasDbConfig =
+  Boolean(process.env.DATABASE_URL) ||
+  Boolean(
+    process.env.DB_HOST &&
+      process.env.DB_USER &&
+      process.env.DB_PASSWORD &&
+      process.env.DB_NAME,
+  );
+
+if (!hasDbConfig) {
+  missing.push("DATABASE_URL or DB_HOST/DB_USER/DB_PASSWORD/DB_NAME");
+}
+if (!process.env.JWT_SECRET) {
+  missing.push("JWT_SECRET");
+}
+
 if (missing.length) {
   console.error("Missing required env:", missing.join(", "));
   process.exit(1);
@@ -58,4 +73,3 @@ server.on("error", (err) => {
   }
   process.exit(1);
 });
-
