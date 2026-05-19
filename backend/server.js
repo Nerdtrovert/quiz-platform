@@ -3,6 +3,7 @@ const cors = require("cors");
 const http = require("http");
 const { Server } = require("socket.io");
 require("dotenv").config();
+const path = require("path");
 
 const missing = [];
 const hasDbConfig =
@@ -56,6 +57,15 @@ app.use("/api/admin", require("./routes/admin.routes"));
 
 app.get("/", (req, res) => res.send("Quiz Platform API running"));
 app.get("/health", (req, res) => res.status(200).json({ status: "ok" }));
+
+// ── Serve frontend in production ───────────────────────────
+const distPath = path.join(__dirname, "../frontend/dist");
+if (process.env.NODE_ENV === "production") {
+  app.use(express.static(distPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.join(distPath, "index.html"));
+  });
+}
 
 // ── Socket.io ─────────────────────────────────────────────
 const initSocket = require("./socket");
