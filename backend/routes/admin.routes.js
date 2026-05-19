@@ -3,9 +3,12 @@ const router = express.Router();
 const {
   getStats,
   getRooms,
+  getRoomsReport,
   getRoomDetail,
   getSystemOverview,
+  getSystemRoomsReport,
   getSystemLiveRooms,
+  listAdmins,
   removeLiveParticipant,
   endLiveRoom,
   getStaticQuizById,
@@ -20,12 +23,27 @@ const {
 
 router.get("/stats", verifyToken, getStats);
 router.get("/rooms", verifyToken, getRooms);
+router.get("/rooms/report", verifyToken, getRoomsReport);
 router.get("/rooms/:room_id", verifyToken, getRoomDetail);
 router.get(
   "/system/overview",
   verifyToken,
   requireMasterAdmin,
   getSystemOverview,
+);
+// System rooms report (master admin)
+router.get(
+  "/system/rooms/report",
+  verifyToken,
+  requireMasterAdmin,
+  getSystemRoomsReport,
+);
+// List admins (master)
+router.get(
+  "/system/admins",
+  verifyToken,
+  requireMasterAdmin,
+  listAdmins,
 );
 router.get(
   "/system/live-rooms",

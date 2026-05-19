@@ -1,4 +1,89 @@
 const pool = require("../config/db");
+const PDFDocument = require("pdfkit");
+
+// Helper: draw a table with column specs and rows, handling page breaks and header repeat
+function drawTable(doc, columns, rows) {
+  const left = doc.page.margins.left;
+  const right = doc.page.width - doc.page.margins.right;
+  const usableWidth = right - left;
+
+  const totalColWidth = columns.reduce((s, c) => s + c.width, 0);
+  // If total width exceeds usable, scale down proportionally
+  const scale = totalColWidth > usableWidth ? usableWidth / totalColWidth : 1;
+  const colWidths = columns.map((c) => Math.floor(c.width * scale));
+
+  const headerHeight = 18;
+  const rowPadding = 4;
+  let y = doc.y;
+
+  function renderHeader() {
+    y = doc.y;
+    // header background
+    doc.save();
+    doc.rect(left - 2, y - 2, usableWidth + 4, headerHeight + 4).fillAndStroke('#f3f4f6', '#e5e7eb');
+    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(10);
+    let x = left;
+    for (let i = 0; i < columns.length; i++) {
+      const col = columns[i];
+      doc.text(col.header, x, y + 2, { width: colWidths[i] - 6, align: col.align || 'left' });
+      x += colWidths[i];
+    }
+    doc.moveDown();
+    y = doc.y + 2;
+    doc.restore();
+  }
+
+  function checkAddPage(requiredHeight) {
+    const bottom = doc.page.height - doc.page.margins.bottom;
+    if (y + requiredHeight > bottom) {
+      doc.addPage();
+      doc.moveDown(1);
+      renderHeader();
+    }
+  }
+
+  // render header first
+  renderHeader();
+
+  doc.font('Courier').fontSize(9).fillColor('#111827');
+  for (const row of rows) {
+    // compute row height based on cell wrapping
+    let maxHeight = 0;
+    for (let i = 0; i < columns.length; i++) {
+      const text = String(row[i] ?? '');
+      const h = doc.heightOfString(text, { width: colWidths[i] - 6 });
+      if (h > maxHeight) maxHeight = h;
+    }
+    const rowHeight = Math.max(maxHeight, 12) + rowPadding;
+    checkAddPage(rowHeight + 6);
+
+    // draw row background alternate
+    const isAlt = (rows.indexOf(row) % 2) === 1;
+    if (isAlt) {
+      doc.save();
+      doc.rect(left - 2, y - 2, usableWidth + 4, rowHeight + 4).fill('#fbfbfc');
+      doc.restore();
+    }
+
+    let x = left;
+    for (let i = 0; i < columns.length; i++) {
+      const text = String(row[i] ?? '');
+      doc.text(text, x + 3, y, { width: colWidths[i] - 6, align: columns[i].align || 'left' });
+      x += colWidths[i];
+    }
+
+    // draw separator line
+    doc.save();
+    doc.moveTo(left - 2, y + rowHeight + 2).lineTo(left - 2 + usableWidth + 4, y + rowHeight + 2).stroke('#e5e7eb');
+    doc.restore();
+
+    y += rowHeight + 4;
+    doc.y = y;
+  }
+
+  doc.moveDown();
+}
+
 
 exports.getStats = async (req, res) => {
   const admin_id = req.user.admin_id;
@@ -57,6 +142,367 @@ exports.getRooms = async (req, res) => {
     res.json({ rooms });
   } catch (err) {
     console.error("Rooms history error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── GENERATE ROOMS REPORT (PDF) FOR AN ADMIN ───────────────
+exports.getRoomsReport = async (req, res) => {
+  const admin_id = req.user.admin_id;
+  const { start_date, end_date } = req.query;
+
+  try {
+    const params = [admin_id];
+    let dateFilter = "";
+    if (start_date && end_date) {
+      dateFilter = `AND ( (r.started_at BETWEEN ? AND ?) OR (r.ended_at BETWEEN ? AND ?) )`;
+      // include full day range for end_date
+      params.push(start_date + " 00:00:00", end_date + " 23:59:59", start_date + " 00:00:00", end_date + " 23:59:59");
+    }
+
+    const [rows] = await pool.query(
+      `SELECT
+        r.room_id, r.room_code, r.status,
+        r.started_at, r.ended_at,
+        q.title AS quiz_title,
+        COUNT(DISTINCT p.participant_id) AS participant_count,
+        COALESCE(MAX(s.total_points), 0) AS winner_points,
+        COALESCE(AVG(s.total_points), 0) AS avg_score,
+        COALESCE(MAX(s.total_points), 0) AS top_score,
+        TIMESTAMPDIFF(SECOND, r.started_at, r.ended_at) AS duration_seconds
+       FROM Rooms r
+       JOIN Quizzes q ON r.quiz_id = q.quiz_id
+       LEFT JOIN Participants p ON p.room_id = r.room_id
+       LEFT JOIN Scores s ON s.room_id = r.room_id
+       WHERE r.admin_id = ? ${dateFilter}
+       GROUP BY r.room_id
+       ORDER BY COALESCE(r.started_at, r.ended_at) DESC`,
+      params,
+    );
+
+    // Static quizzes summary (attempt counts and scores)
+    let staticRowsQuery = `SELECT
+         q.quiz_id,
+         q.title AS quiz_title,
+         COUNT(sa.attempt_id) AS attempts,
+         COALESCE(AVG(sa.total_points), 0) AS avg_score,
+         COALESCE(MAX(sa.total_points), 0) AS top_score
+       FROM Quizzes q
+       LEFT JOIN StaticAttempts sa ON sa.quiz_id = q.quiz_id
+       WHERE q.is_static = 1`;
+    const staticParams = [];
+    if (start_date && end_date) {
+      staticRowsQuery = `SELECT
+         q.quiz_id,
+         q.title AS quiz_title,
+         COUNT(sa.attempt_id) AS attempts,
+         COALESCE(AVG(sa.total_points), 0) AS avg_score,
+         COALESCE(MAX(sa.total_points), 0) AS top_score
+       FROM Quizzes q
+       LEFT JOIN StaticAttempts sa ON sa.quiz_id = q.quiz_id AND (sa.completed_at BETWEEN ? AND ?)
+       WHERE q.is_static = 1`;
+      staticParams.push(start_date + " 00:00:00", end_date + " 23:59:59");
+    }
+    staticRowsQuery += ` GROUP BY q.quiz_id ORDER BY q.quiz_id ASC`;
+    const [staticRows] = await pool.query(staticRowsQuery, staticParams);
+
+    // Fetch attempts details for quizzes that have attempts
+    const quizIds = staticRows.filter((q) => q.attempts > 0).map((q) => q.quiz_id);
+    let attemptsByQuiz = {};
+    if (quizIds.length) {
+      const placeholders = quizIds.map(() => "?").join(", ");
+      const attemptParams = [...quizIds];
+      let attemptDateFilter = "";
+      if (start_date && end_date) {
+        attemptDateFilter = " AND (completed_at BETWEEN ? AND ? )";
+        attemptParams.push(start_date + " 00:00:00", end_date + " 23:59:59");
+      }
+      const [attemptRows] = await pool.query(
+        `SELECT
+          attempt_id, quiz_id, player_name, total_points, correct_count, wrong_count, time_taken_ms, final_rank, completed_at
+         FROM StaticAttempts
+         WHERE quiz_id IN (${placeholders}) ${attemptDateFilter}
+         ORDER BY quiz_id, completed_at DESC`,
+        attemptParams,
+      );
+      attemptsByQuiz = attemptRows.reduce((acc, a) => {
+        if (!acc[a.quiz_id]) acc[a.quiz_id] = [];
+        acc[a.quiz_id].push(a);
+        return acc;
+      }, {});
+    }
+
+    // Generate PDF
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    const filename = `rooms-report-${admin_id}-${Date.now()}.pdf`;
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    doc.fontSize(22).text("Qurio", { align: "center" });
+    doc.moveDown(0.1);
+    doc.fontSize(16).text("Rooms Report", { align: "center" });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Admin ID: ${admin_id}`);
+    doc.text(`Date range: ${start_date || "(all)"} — ${end_date || "(all)"}`);
+    doc.moveDown();
+
+    // Live quizzes table (styled)
+    doc.fontSize(12).font('Helvetica-Bold').text('Live Quizzes Summary');
+    doc.moveDown(0.2);
+    const liveCols = [
+      { header: 'RoomCode', width: 80, align: 'left' },
+      { header: 'Quiz Title', width: 260, align: 'left' },
+      { header: 'Participants', width: 60, align: 'right' },
+      { header: 'WinnerPts', width: 60, align: 'right' },
+      { header: 'Duration', width: 60, align: 'right' },
+    ];
+    const liveRows = rows.map((r) => [
+      r.room_code,
+      r.quiz_title,
+      String(r.participant_count),
+      String(Math.round(r.winner_points || 0)),
+      r.duration_seconds ? `${Math.floor(r.duration_seconds / 60)}m ${r.duration_seconds % 60}s` : '-',
+    ]);
+    drawTable(doc, liveCols, liveRows);
+    doc.moveDown();
+
+    // Static quizzes table (styled)
+    doc.fontSize(12).font('Helvetica-Bold').text('Static Quizzes Summary');
+    doc.moveDown(0.2);
+    const staticCols = [
+      { header: 'QuizID', width: 60, align: 'left' },
+      { header: 'Title', width: 300, align: 'left' },
+      { header: 'Attempts', width: 80, align: 'right' },
+      { header: 'Avg', width: 60, align: 'right' },
+      { header: 'Top', width: 60, align: 'right' },
+    ];
+    const staticSummaryRows = staticRows.map((q) => [
+      String(q.quiz_id),
+      q.quiz_title,
+      String(q.attempts),
+      Number(q.avg_score).toFixed(1),
+      String(q.top_score),
+    ]);
+    drawTable(doc, staticCols, staticSummaryRows);
+    doc.moveDown();
+
+    // Detailed attempts per static quiz (styled)
+    for (const q of staticRows) {
+      const attempts = attemptsByQuiz[q.quiz_id] || [];
+      if (!attempts.length) continue;
+      doc.addPage();
+      doc.fontSize(12).font('Helvetica-Bold').text(`Attempts for: ${q.quiz_title} (Quiz ID: ${q.quiz_id})`);
+      doc.moveDown(0.2);
+      const attemptCols = [
+        { header: 'AttemptID', width: 70, align: 'left' },
+        { header: 'Player', width: 180, align: 'left' },
+        { header: 'Score', width: 60, align: 'right' },
+        { header: 'Correct', width: 60, align: 'right' },
+        { header: 'Wrong', width: 60, align: 'right' },
+        { header: 'Time(s)', width: 60, align: 'right' },
+        { header: 'Completed At', width: 120, align: 'left' },
+      ];
+      const attemptRows = attempts.map((a) => [
+        String(a.attempt_id),
+        a.player_name,
+        String(a.total_points),
+        String(a.correct_count),
+        String(a.wrong_count),
+        String(a.time_taken_ms ? Math.round(a.time_taken_ms / 1000) : 0),
+        a.completed_at ? new Date(a.completed_at).toLocaleString() : '-',
+      ]);
+      drawTable(doc, attemptCols, attemptRows);
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error("Rooms report error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── GENERATE SYSTEM ROOMS REPORT (PDF) FOR MASTER ADMIN ────
+exports.getSystemRoomsReport = async (req, res) => {
+  const { start_date, end_date, admin_id } = req.query;
+
+  try {
+    const whereClauses = [];
+    const params = [];
+
+    if (start_date && end_date) {
+      whereClauses.push(`((r.started_at BETWEEN ? AND ?) OR (r.ended_at BETWEEN ? AND ?))`);
+      params.push(start_date + " 00:00:00", end_date + " 23:59:59", start_date + " 00:00:00", end_date + " 23:59:59");
+    }
+
+    if (admin_id && admin_id !== "all") {
+      whereClauses.push(`r.admin_id = ?`);
+      params.push(admin_id);
+    }
+
+    const whereSQL = whereClauses.length ? `WHERE ${whereClauses.join(' AND ')}` : "";
+
+    const [rows] = await pool.query(
+      `SELECT
+        r.room_id, r.room_code, r.status,
+        r.started_at, r.ended_at,
+        q.title AS quiz_title,
+        a.name AS admin_name,
+        COUNT(DISTINCT p.participant_id) AS participant_count,
+        COALESCE(MAX(s.total_points), 0) AS winner_points,
+        COALESCE(AVG(s.total_points), 0) AS avg_score,
+        COALESCE(MAX(s.total_points), 0) AS top_score,
+        TIMESTAMPDIFF(SECOND, r.started_at, r.ended_at) AS duration_seconds
+       FROM Rooms r
+       JOIN Quizzes q ON r.quiz_id = q.quiz_id
+       JOIN Admins a ON r.admin_id = a.admin_id
+       LEFT JOIN Participants p ON p.room_id = r.room_id
+       LEFT JOIN Scores s ON s.room_id = r.room_id
+       ${whereSQL}
+       GROUP BY r.room_id
+       ORDER BY COALESCE(r.started_at, r.ended_at) DESC`,
+      params,
+    );
+
+    // Static quizzes summary (attempt counts and scores)
+    // Use LEFT JOIN with date condition when date range provided so counts reflect range
+    let staticRowsQuery = `SELECT
+         q.quiz_id,
+         q.title AS quiz_title,
+         COUNT(sa.attempt_id) AS attempts,
+         COALESCE(AVG(sa.total_points), 0) AS avg_score,
+         COALESCE(MAX(sa.total_points), 0) AS top_score
+       FROM Quizzes q
+       LEFT JOIN StaticAttempts sa ON sa.quiz_id = q.quiz_id
+       WHERE q.is_static = 1`;
+    const staticParams = [];
+    if (start_date && end_date) {
+      staticRowsQuery = `SELECT
+         q.quiz_id,
+         q.title AS quiz_title,
+         COUNT(sa.attempt_id) AS attempts,
+         COALESCE(AVG(sa.total_points), 0) AS avg_score,
+         COALESCE(MAX(sa.total_points), 0) AS top_score
+       FROM Quizzes q
+       LEFT JOIN StaticAttempts sa ON sa.quiz_id = q.quiz_id AND (sa.completed_at BETWEEN ? AND ?)
+       WHERE q.is_static = 1`;
+      staticParams.push(start_date + " 00:00:00", end_date + " 23:59:59");
+    }
+    staticRowsQuery += ` GROUP BY q.quiz_id ORDER BY q.quiz_id ASC`;
+    const [staticRows] = await pool.query(staticRowsQuery, staticParams);
+
+    // Fetch attempts details for quizzes that have attempts
+    const quizIds = staticRows.filter((q) => q.attempts > 0).map((q) => q.quiz_id);
+    let attemptsByQuiz = {};
+    if (quizIds.length) {
+      const placeholders = quizIds.map(() => "?").join(", ");
+      const attemptParams = [...quizIds];
+      let attemptDateFilter = "";
+      if (start_date && end_date) {
+        attemptDateFilter = " AND (completed_at BETWEEN ? AND ? )";
+        attemptParams.push(start_date + " 00:00:00", end_date + " 23:59:59");
+      }
+      const [attemptRows] = await pool.query(
+        `SELECT
+          attempt_id, quiz_id, player_name, total_points, correct_count, wrong_count, time_taken_ms, final_rank, completed_at
+         FROM StaticAttempts
+         WHERE quiz_id IN (${placeholders}) ${attemptDateFilter}
+         ORDER BY quiz_id, completed_at DESC`,
+        attemptParams,
+      );
+      attemptsByQuiz = attemptRows.reduce((acc, a) => {
+        if (!acc[a.quiz_id]) acc[a.quiz_id] = [];
+        acc[a.quiz_id].push(a);
+        return acc;
+      }, {});
+    }
+
+    // Generate PDF
+    const doc = new PDFDocument({ margin: 40, size: "A4" });
+    res.setHeader("Content-Type", "application/pdf");
+    const filename = `system-rooms-report-${Date.now()}.pdf`;
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+    doc.pipe(res);
+
+    doc.fontSize(22).text("Qurio", { align: "center" });
+    doc.moveDown(0.1);
+    doc.fontSize(16).text("System Rooms Report", { align: "center" });
+    doc.moveDown(0.5);
+    doc.fontSize(10).text(`Date range: ${start_date || "(all)"} — ${end_date || "(all)"}`);
+    if (admin_id && admin_id !== "all") doc.text(`Admin: ${admin_id}`);
+    doc.moveDown();
+
+    // Live quizzes table
+    doc.fontSize(12).text("Live Quizzes Summary", { underline: true });
+    doc.moveDown(0.2);
+    doc.font("Courier").fontSize(9);
+    const liveHeader = `${"RoomCode".padEnd(12)} ${"Quiz Title".padEnd(36)} ${"Admin".padEnd(18)} ${"Participants".padStart(12)} ${"WinnerPts".padStart(10)} ${"Duration".padStart(10)}`;
+    doc.text(liveHeader);
+    doc.moveDown(0.1);
+    rows.forEach((r) => {
+      const duration = r.duration_seconds ? `${Math.floor(r.duration_seconds / 60)}m ${r.duration_seconds % 60}s` : "-";
+      const line = `${String(r.room_code).padEnd(12)} ${String(r.quiz_title).substring(0,34).padEnd(36)} ${String(r.admin_name).substring(0,16).padEnd(18)} ${String(r.participant_count).padStart(12)} ${String(Math.round(r.winner_points)).padStart(10)} ${duration.padStart(10)}`;
+      doc.text(line);
+    });
+    doc.moveDown();
+
+    // Static quizzes table
+    doc.font("Helvetica").moveDown(0.5);
+    doc.fontSize(12).text("Static Quizzes Summary", { underline: true });
+    doc.moveDown(0.2);
+    doc.font("Courier").fontSize(9);
+    const staticHeader = `${"QuizID".padEnd(8)} ${"Title".padEnd(36)} ${"Attempts".padStart(10)} ${"Avg".padStart(8)} ${"Top".padStart(8)}`;
+    // Static quizzes table (styled)
+    doc.fontSize(12).font('Helvetica-Bold').text('Static Quizzes Summary');
+    doc.moveDown(0.2);
+    const staticCols = [
+      { header: 'QuizID', width: 60, align: 'left' },
+      { header: 'Title', width: 300, align: 'left' },
+      { header: 'Attempts', width: 80, align: 'right' },
+      { header: 'Avg', width: 60, align: 'right' },
+      { header: 'Top', width: 60, align: 'right' },
+    ];
+    const staticSummaryRows = staticRows.map((q) => [
+      String(q.quiz_id),
+      q.quiz_title,
+      String(q.attempts),
+      Number(q.avg_score).toFixed(1),
+      String(q.top_score),
+    ]);
+    drawTable(doc, staticCols, staticSummaryRows);
+    doc.moveDown();
+
+    // Detailed attempts per static quiz (styled)
+    for (const q of staticRows) {
+      const attempts = attemptsByQuiz[q.quiz_id] || [];
+      if (!attempts.length) continue;
+      doc.addPage();
+      doc.fontSize(12).font('Helvetica-Bold').text(`Attempts for: ${q.quiz_title} (Quiz ID: ${q.quiz_id})`);
+      doc.moveDown(0.2);
+      const attemptCols = [
+        { header: 'AttemptID', width: 70, align: 'left' },
+        { header: 'Player', width: 180, align: 'left' },
+        { header: 'Score', width: 60, align: 'right' },
+        { header: 'Correct', width: 60, align: 'right' },
+        { header: 'Wrong', width: 60, align: 'right' },
+        { header: 'Time(s)', width: 60, align: 'right' },
+        { header: 'Completed At', width: 120, align: 'left' },
+      ];
+      const attemptRows = attempts.map((a) => [
+        String(a.attempt_id),
+        a.player_name,
+        String(a.total_points),
+        String(a.correct_count),
+        String(a.wrong_count),
+        String(a.time_taken_ms ? Math.round(a.time_taken_ms / 1000) : 0),
+        a.completed_at ? new Date(a.completed_at).toLocaleString() : '-',
+      ]);
+      drawTable(doc, attemptCols, attemptRows);
+    }
+
+    doc.end();
+  } catch (err) {
+    console.error("System rooms report error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -129,6 +575,17 @@ exports.getSystemOverview = async (_req, res) => {
     });
   } catch (err) {
     console.error("System overview error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// ─── LIST ADMINS (MASTER) ─────────────────────────────────
+exports.listAdmins = async (_req, res) => {
+  try {
+    const [rows] = await pool.query("SELECT admin_id, name FROM Admins ORDER BY name ASC");
+    res.json({ admins: rows });
+  } catch (err) {
+    console.error("List admins error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -216,7 +673,7 @@ exports.getSystemStaticAttempts = async (req, res) => {
        LEFT JOIN StaticAttempts sa ON sa.quiz_id = q.quiz_id
        WHERE q.is_static = 1
        GROUP BY q.quiz_id
-       ORDER BY q.quiz_id DESC`,
+       ORDER BY q.quiz_id ASC`,
     );
 
     if (!quizId) {
@@ -543,3 +1000,4 @@ exports.getStaticLeaderboard = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
