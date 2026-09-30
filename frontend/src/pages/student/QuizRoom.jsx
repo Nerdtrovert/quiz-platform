@@ -55,7 +55,6 @@ export default function QuizRoom() {
       }
       // Process any pending answer batches from previous connection
       const quizId = sessionStorage.getItem("quiz_id");
-      const participantId = sessionStorage.getItem("participant_id");
       if (quizId && participantId && socketRef.current) {
         const batcher = getAnswerBatcher(
           quizId,
