@@ -122,7 +122,7 @@ exports.createQuiz = async (req, res) => {
         admin_id,
         title,
         genre || "Mixed",
-        difficulty || "medium",
+        difficulty === "none" ? "mixed" : difficulty || "medium",
         question_ids.length,
         time_per_question || 30,
       ],

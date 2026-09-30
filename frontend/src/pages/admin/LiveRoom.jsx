@@ -9,7 +9,7 @@ export default function LiveRoom() {
   const navigate = useNavigate();
   const admin = JSON.parse(localStorage.getItem("admin") || "{}");
   const socketRef = useRef(null);
-  const roomCodeRef = useRef("");
+  const roomCodeRef = useRef(sessionStorage.getItem("live_room_code") || "");
   const createProgressTimerRef = useRef(null);
   const createRoomTimeoutRef = useRef(null);
 
@@ -43,6 +43,38 @@ export default function LiveRoom() {
 
   useEffect(() => {
     fetchQuizzes();
+    const restoredRoomCode = sessionStorage.getItem("live_room_code");
+    if (restoredRoomCode) {
+      setRoomCode(restoredRoomCode);
+      setRoomCreated(true);
+      setStatus("waiting");
+      const socket = io(SOCKET_URL);
+      socketRef.current = socket;
+      socket.on("connect", () => {
+        socket.emit("rejoin-admin", {
+          room_code: restoredRoomCode,
+          admin_id: admin.admin_id,
+        });
+      });
+      socket.on("room-restored", ({ status: restoredStatus, total_questions }) => {
+        setTotalQuestions(total_questions || 0);
+        setStatus(restoredStatus === "paused" ? "active" : restoredStatus);
+      });
+      socket.on("participant-joined", ({ participants: nextParticipants }) => {
+        setParticipants(nextParticipants || []);
+      });
+      socket.on("question-start", (question) => {
+        setCurrentQuestion(question);
+        setQuestionIndex(question.index);
+        setTimeLeft(question.time_per_question);
+        setStatus("active");
+      });
+      socket.on("quiz-end", ({ leaderboard: nextLeaderboard }) => {
+        sessionStorage.removeItem("live_room_code");
+        setLeaderboard(nextLeaderboard || []);
+        setStatus("ended");
+      });
+    }
     return () => {
       if (socketRef.current) socketRef.current.disconnect();
       if (timerRef.current) clearInterval(timerRef.current);
@@ -93,15 +125,23 @@ export default function LiveRoom() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      socket.emit("create-room", {
-        quiz_id: selectedQuiz.quiz_id,
-        admin_id: admin.admin_id,
-        time_per_question: selectedQuiz.time_per_question || 30,
-      });
+      if (roomCodeRef.current) {
+        socket.emit("rejoin-admin", {
+          room_code: roomCodeRef.current,
+          admin_id: admin.admin_id,
+        });
+      } else {
+        socket.emit("create-room", {
+          quiz_id: selectedQuiz.quiz_id,
+          admin_id: admin.admin_id,
+          time_per_question: selectedQuiz.time_per_question || 30,
+        });
+      }
     });
 
     socket.on("room-created", ({ room_code }) => {
       roomCodeRef.current = room_code;
+      sessionStorage.setItem("live_room_code", room_code);
       setRoomCode(room_code);
       setRoomCreated(true);
       setIsCreatingRoom(false);
@@ -115,6 +155,15 @@ export default function LiveRoom() {
         createRoomTimeoutRef.current = null;
       }
       setStatus("waiting");
+    });
+
+    socket.on("room-restored", ({ room_code, status: restoredStatus, total_questions }) => {
+      roomCodeRef.current = room_code;
+      sessionStorage.setItem("live_room_code", room_code);
+      setRoomCode(room_code);
+      setRoomCreated(true);
+      setTotalQuestions(total_questions || 0);
+      setStatus(restoredStatus === "paused" ? "active" : restoredStatus);
     });
 
     socket.on("participant-joined", ({ participants, count }) => {
@@ -163,6 +212,7 @@ export default function LiveRoom() {
     });
 
     socket.on("quiz-end", ({ leaderboard }) => {
+      sessionStorage.removeItem("live_room_code");
       const safeLeaderboard = leaderboard || [];
       setLeaderboard(safeLeaderboard);
       setStatus("ended");

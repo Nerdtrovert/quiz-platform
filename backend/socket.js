@@ -2,6 +2,17 @@ const pool = require("./config/db");
 
 module.exports = function initSocket(io) {
   const rooms = {};
+  const configuredRoomLimit = Number.parseInt(
+    process.env.ROOM_MAX_PARTICIPANTS || "60",
+    10,
+  );
+  const maxParticipants =
+    Number.isInteger(configuredRoomLimit) &&
+    configuredRoomLimit >= 55 &&
+    configuredRoomLimit <= 60
+      ? configuredRoomLimit
+      : 60;
+  let restorePromise;
 
   // ── Helpers ───────────────────────────────────────────────
 
@@ -41,6 +52,92 @@ module.exports = function initSocket(io) {
       participants: list,
     });
   }
+
+  async function restoreRooms() {
+    const [dbRooms] = await pool.query(
+       `SELECT r.room_id, r.quiz_id, r.admin_id, r.room_code, r.status,
+               r.current_question_index, r.started_at, q.time_per_question
+        FROM Rooms r
+        JOIN Quizzes q ON q.quiz_id = r.quiz_id
+        WHERE r.status IN ('waiting', 'active', 'paused')`,
+    );
+
+    for (const dbRoom of dbRooms) {
+      const [participants] = await pool.query(
+        `SELECT participant_id, name, streak, multiplier
+         FROM Participants
+         WHERE room_id = ? AND is_active = TRUE`,
+        [dbRoom.room_id],
+      );
+      const [responses] = await pool.query(
+        `SELECT participant_id, question_id, selected_option, is_correct,
+                response_time_ms, points_earned
+         FROM Responses
+         WHERE room_id = ?`,
+        [dbRoom.room_id],
+      );
+      const questions = await loadQuestions(dbRoom.quiz_id);
+      const answers = {};
+      const questionById = new Map(
+        questions.map((question, index) => [question.question_id, index]),
+      );
+      for (const response of responses) {
+        const index = questionById.get(response.question_id);
+        if (index == null) continue;
+        if (!answers[index]) answers[index] = {};
+        answers[index][response.participant_id] = {
+          selected_option: response.selected_option,
+          is_correct: Boolean(response.is_correct),
+          points: Number(response.points_earned),
+          response_time_ms: response.response_time_ms,
+        };
+      }
+
+      const participantMap = {};
+      for (const participant of participants) {
+        const score = responses
+          .filter((response) => response.participant_id === participant.participant_id)
+          .reduce((total, response) => total + Number(response.points_earned), 0);
+        participantMap[`restored-${participant.participant_id}`] = {
+          participant_id: participant.participant_id,
+          name: participant.name,
+          score,
+          streak: participant.streak,
+          multiplier: Number(participant.multiplier),
+        };
+      }
+
+      rooms[dbRoom.room_code] = {
+        quiz_id: dbRoom.quiz_id,
+        admin_id: dbRoom.admin_id,
+        room_id: dbRoom.room_id,
+        status: dbRoom.status,
+        currentIndex: dbRoom.current_question_index,
+        timePerQuestion: dbRoom.time_per_question || 20,
+        participants: participantMap,
+        answers,
+        questions,
+        paused: dbRoom.status === "paused",
+        questionTimer: null,
+        autoTerminateTimer: null,
+        adminSocketId: null,
+      };
+
+      if (dbRoom.status === "active" && questions[dbRoom.current_question_index]) {
+        rooms[dbRoom.room_code].questionTimer = setTimeout(
+          () =>
+            advanceQuestion(rooms[dbRoom.room_code], dbRoom.room_code).catch(
+              (err) => console.error("Restored room timer error:", err.message),
+            ),
+          (rooms[dbRoom.room_code].timePerQuestion + 3) * 1000,
+        );
+      }
+    }
+  }
+
+  restorePromise = restoreRooms().catch((err) => {
+    console.error("Live room restoration failed:", err.message);
+  });
 
   async function loadQuestions(quiz_id) {
     const [questions] = await pool.query(
@@ -148,7 +245,8 @@ module.exports = function initSocket(io) {
 
   async function endQuiz(room_code) {
     const room = rooms[room_code];
-    if (!room) return;
+    if (!room || room.status === "ended" || room.ending) return;
+    room.ending = true;
 
     if (room.questionTimer) clearTimeout(room.questionTimer);
     if (room.autoTerminateTimer) clearTimeout(room.autoTerminateTimer);
@@ -193,6 +291,7 @@ module.exports = function initSocket(io) {
     }
 
     io.to(room_code).emit("quiz-end", { leaderboard: sorted });
+    room.ending = false;
     console.log(`Quiz ended: ${room_code}`);
   }
 
@@ -205,6 +304,7 @@ module.exports = function initSocket(io) {
     socket.on(
       "create-room",
       async ({ quiz_id, admin_id, time_per_question }) => {
+        await restorePromise;
         // Generate a unique room code with retry
         let room_code;
         let result;
@@ -246,6 +346,7 @@ module.exports = function initSocket(io) {
           paused: false,
           questionTimer: null,
           autoTerminateTimer: null,
+          adminSocketId: socket.id,
         };
 
         // Auto-terminate after 20 minutes no matter what
@@ -270,6 +371,7 @@ module.exports = function initSocket(io) {
 
     // ── STUDENT: Join room ──────────────────────────────────
     socket.on("join-room", async ({ room_code, name }) => {
+      await restorePromise;
       const room = rooms[room_code];
       const safeName = (name || "Player").trim() || "Player";
       if (!room) return socket.emit("error", { message: "Room not found" });
@@ -277,6 +379,11 @@ module.exports = function initSocket(io) {
         return socket.emit("error", { message: "Quiz already started" });
 
       try {
+        if (getParticipantList(room).length >= maxParticipants) {
+          return socket.emit("error", {
+            message: `This room has reached its ${maxParticipants}-player limit`,
+          });
+        }
         const [result] = await pool.query(
           `INSERT INTO Participants (room_id, name) VALUES (?, ?)`,
           [room.room_id, safeName],
@@ -309,6 +416,7 @@ module.exports = function initSocket(io) {
 
     // ── STUDENT: Rejoin room ────────────────────────────────
     socket.on("rejoin-room", async ({ room_code, participant_id, name }) => {
+      await restorePromise;
       const room = rooms[room_code];
       if (!room) return;
 
@@ -330,6 +438,11 @@ module.exports = function initSocket(io) {
       socket.room_code = room_code;
       socket.participant_id = participant_id;
 
+      socket.emit("rejoined-room", {
+        participant_id,
+        room_code,
+        status: room.status,
+      });
       emitParticipantSnapshot(room_code);
 
       if (room.status === "active" && room.questions[room.currentIndex]) {
@@ -337,8 +450,31 @@ module.exports = function initSocket(io) {
       }
     });
 
+    socket.on("rejoin-admin", async ({ room_code, admin_id }) => {
+      await restorePromise;
+      const room = rooms[room_code];
+      if (!room || Number(room.admin_id) !== Number(admin_id)) {
+        return socket.emit("error", { message: "Live room could not be restored" });
+      }
+      room.adminSocketId = socket.id;
+      socket.join(room_code);
+      socket.room_code = room_code;
+      socket.is_admin = true;
+      socket.emit("room-restored", {
+        room_code,
+        status: room.status,
+        currentIndex: room.currentIndex,
+        total_questions: room.questions.length,
+      });
+      emitParticipantSnapshot(room_code);
+      if (room.status === "active" && room.questions[room.currentIndex]) {
+        sendQuestion(room, room_code, socket);
+      }
+    });
+
     // ── ADMIN: Start quiz ───────────────────────────────────
     socket.on("start-quiz", async ({ room_code }) => {
+      await restorePromise;
       const room = rooms[room_code];
       if (!room) return;
 
@@ -367,10 +503,14 @@ module.exports = function initSocket(io) {
     socket.on(
       "submit-answer",
       async ({ room_code, question_id, selected_option, response_time_ms }) => {
+        await restorePromise;
         const room = rooms[room_code];
         if (!room || room.status !== "active") return;
 
-        const participant = room.participants[socket.id];
+        const participant = room.participants[socket.id] ||
+          Object.values(room.participants).find(
+            (entry) => entry.participant_id === socket.participant_id,
+          );
         if (!participant) return;
 
         const idx = room.currentIndex;
@@ -461,6 +601,222 @@ module.exports = function initSocket(io) {
       },
     );
 
+    // ── STUDENT: Submit answer batch ──────────────────────────────
+    socket.on(
+      "submit-answer-batch",
+      async ({ room_code, answers }) => {
+        await restorePromise;
+        const room = rooms[room_code];
+        if (!room || room.status !== "active") return;
+
+        // Validate we have answers to process
+        if (!answers || !Array.isArray(answers) || answers.length === 0) return;
+
+        // Process all answers in a single database transaction for efficiency
+        const connection = await pool.getConnection();
+        try {
+          await connection.beginTransaction();
+
+          // Prepare batch data
+          const answerResults = [];
+          const participantUpdates = new Map(); // participant_id => {score, streak, multiplier}
+          const responseInserts = [];
+
+          // First pass: validate and prepare all answers
+          for (const answer of answers) {
+            const { question_id, selected_option, response_time_ms, participant_id } = answer;
+
+            // Find participant in room
+            const participantEntry = Object.values(room.participants).find(
+              (entry) => entry.participant_id === participant_id
+            );
+
+            if (!participantEntry) {
+              // Skip invalid participant
+              answerResults.push({
+                success: false,
+                error: "Participant not found in room",
+                answer_id: `${question_id}-${participant_id}`
+              });
+              continue;
+            }
+
+            // Check if already answered this question (prevent duplicates)
+            if (room.answers[question_id] && room.answers[question_id][participant_id]) {
+              answerResults.push({
+                success: false,
+                error: "Already answered this question",
+                answer_id: `${question_id}-${participant_id}`
+              });
+              continue;
+            }
+
+            // Get question data
+            const question = room.questions.find(q => q.question_id === question_id);
+            if (!question) {
+              answerResults.push({
+                success: false,
+                error: "Question not found",
+                answer_id: `${question_id}-${participant_id}`
+              });
+              continue;
+            }
+
+            // Determine correctness
+            const correctOption = normalizeOptions(question.options).find(
+              (o) => o.is_correct,
+            )?.option_number;
+            const is_correct =
+              parseInt(selected_option, 10) === parseInt(correctOption, 10);
+
+            // Calculate points and update participant state
+            const timeLimit = room.timePerQuestion * 1000;
+            const speedBonus = is_correct
+              ? Math.round(
+                  ((timeLimit - Math.min(response_time_ms, timeLimit)) /
+                    timeLimit) *
+                  200,
+                )
+              : 0;
+            const points = is_correct
+              ? Math.round((question.base_points + speedBonus) * participantEntry.multiplier)
+              : 0;
+
+            // Update participant state (in memory)
+            let newStreak = participantEntry.streak;
+            let newMultiplier = participantEntry.multiplier;
+
+            if (is_correct) {
+              newStreak += 1;
+              if (newStreak >= 4) newMultiplier = 2;
+              else if (newStreak === 3) newMultiplier = 1.5;
+              else if (newStreak === 2) newMultiplier = 1.25;
+              else newMultiplier = 1;
+            } else {
+              newStreak = 0;
+              newMultiplier = 1;
+            }
+
+            const newScore = participantEntry.score + points;
+
+            // Store update for later
+            participantUpdates.set(participant_id, {
+              score: newScore,
+              streak: newStreak,
+              multiplier: newMultiplier
+            });
+
+            // Prepare response insert
+            responseInserts.push([
+              participant_id,
+              question_id,
+              room.room_id,
+              selected_option,
+              is_correct ? 1 : 0,
+              response_time_ms,
+              points
+            ]);
+
+            // Store answer in room state
+            if (!room.answers[question_id]) room.answers[question_id] = {};
+            room.answers[question_id][participant_id] = {
+              selected_option,
+              is_correct,
+              points,
+              response_time_ms,
+            };
+
+            // Prepare success result
+            answerResults.push({
+              success: true,
+              is_correct,
+              points,
+              correct_option: correctOption,
+              streak: newStreak,
+              multiplier: newMultiplier,
+              total_score: newScore,
+              answer_id: `${question_id}-${participant_id}`
+            });
+          }
+
+          // Execute batch insert for responses
+          if (responseInserts.length > 0) {
+            await connection.query(
+              `INSERT INTO Responses (participant_id, question_id, room_id, selected_option, is_correct, response_time_ms, points_earned) VALUES ?`,
+              [responseInserts]
+            );
+          }
+
+          // Update participant records in database
+          for (const [participant_id, update] of participantUpdates.entries()) {
+            await connection.query(
+              `UPDATE Participants SET score = ?, streak = ?, multiplier = ? WHERE participant_id = ?`,
+              [update.score, update.streak, update.multiplier, participant_id]
+            );
+          }
+
+          await connection.commit();
+
+          // Emit individual answer results
+          for (const result of answerResults) {
+            if (result.success) {
+              // Find the socket for this participant to emit to them specifically
+              const participantSocketId = Object.keys(room.participants).find(
+                sid => room.participants[sid]?.participant_id === result.answer_id.split('-')[1]
+              );
+
+              if (participantSocketId) {
+                // Emit to specific participant
+                io.to(participantSocketId).emit("answer-result", {
+                  is_correct: result.is_correct,
+                  points: result.points,
+                  correct_option: result.correct_option,
+                  streak: result.streak,
+                  multiplier: result.multiplier,
+                  total_score: result.total_score
+                });
+              }
+            } else {
+              // Emit error for failed answers - find the participant socket
+              const participantSocketId = Object.keys(room.participants).find(
+                sid => room.participants[sid]?.participant_id === result.answer_id.split('-')[1]
+              );
+
+              if (participantSocketId) {
+                // Emit error to specific participant
+                io.to(participantSocketId).emit("answer-error", {
+                  error: result.error,
+                  answer_id: result.answer_id
+                });
+              }
+            }
+          }
+
+          // Update answer stats for the room
+          const totalAnswers = answers.length;
+          const successfulAnswers = answerResults.filter(r => r.success).length;
+          const correctAnswers = answerResults.filter(r => r.success && r.is_correct).length;
+
+          io.to(room_code).emit("answer-stats-batch", {
+            processed: successfulAnswers,
+            total: totalAnswers,
+            correct: correctAnswers
+          });
+
+        } catch (err) {
+          await connection.rollback();
+          console.error("submit-answer-batch error:", err.message);
+          // Emit batch error to all participants in room
+          io.to(room_code).emit("answer-batch-error", {
+            error: "Failed to process answer batch",
+            details: err.message
+          });
+        } finally {
+          connection.release();
+        }
+      }
+    );
+
     // ── ADMIN: Next question ────────────────────────────────
     socket.on("next-question", async ({ room_code }) => {
       const room = rooms[room_code];
@@ -509,8 +865,13 @@ module.exports = function initSocket(io) {
       const room = rooms[room_code];
       if (!room) return;
 
+      if (socket.is_admin && room.adminSocketId === socket.id) {
+        room.adminSocketId = null;
+      }
+
       if (!socket.is_admin && room.participants[socket.id]) {
-        delete room.participants[socket.id];
+        // Keep the participant in memory so a transient disconnect can rejoin
+        // without changing the leaderboard or participant count.
         emitParticipantSnapshot(room_code);
       }
 

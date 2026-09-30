@@ -17,6 +17,10 @@ export default function MasterAdminDashboard() {
   const [staticQuizzes, setStaticQuizzes] = useState([]);
   const [showQuizModal, setShowQuizModal] = useState(false);
   const [selectedQuiz, setSelectedQuiz] = useState(null);
+  const [admins, setAdmins] = useState([]);
+  const [selectedAdmin, setSelectedAdmin] = useState("all");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     if (!admin.is_master) {
@@ -28,15 +32,17 @@ export default function MasterAdminDashboard() {
 
   const fetchAll = async () => {
     try {
-      const [overviewRes, liveRes, staticQuizRes] = await Promise.all([
+      const [overviewRes, liveRes, staticQuizRes, adminsRes] = await Promise.all([
         api.get("/admin/system/overview"),
         api.get("/admin/system/live-rooms"),
         api.get("/quizzes/static"),
+        api.get("/admin/system/admins"),
       ]);
 
       setOverview(overviewRes.data);
       setLiveRooms(liveRes.data.rooms || []);
       setStaticQuizzes(staticQuizRes.data.quizzes || []);
+      setAdmins(adminsRes.data.admins || []);
     } catch (err) {
       console.error(err);
     }
@@ -87,6 +93,31 @@ export default function MasterAdminDashboard() {
     }
   };
 
+  const downloadSystemRoomsReport = async () => {
+    try {
+      const params = {};
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+      if (selectedAdmin && selectedAdmin !== "all") params.admin_id = selectedAdmin;
+      const res = await api.get("/admin/system/rooms/report", {
+        params,
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `system-rooms-report-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download system report error:", err);
+      alert("Failed to download system report");
+    }
+  };
+
   return (
     <div style={s.page}>
       <aside style={s.sidebar}>
@@ -124,6 +155,18 @@ export default function MasterAdminDashboard() {
             <p style={s.subtitle}>
               Cross-room control, moderation, and static quiz management.
             </p>
+            <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label style={{ fontSize: "0.8rem", color: "#ccc" }}>Date range:</label>
+              <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} style={{ padding: "0.35rem", borderRadius: "6px", border: "1px solid #2a1f1d", background: "#0b0b0b", color: "#fff" }} />
+              <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} style={{ padding: "0.35rem", borderRadius: "6px", border: "1px solid #2a1f1d", background: "#0b0b0b", color: "#fff" }} />
+              <select value={selectedAdmin} onChange={(e)=>setSelectedAdmin(e.target.value)} style={{ padding: "0.35rem", borderRadius: "6px", background: "#0b0b0b", color: "#fff", border: "1px solid #2a1f1d" }}>
+                <option value="all">All admins</option>
+                {admins.map(a=> <option key={a.admin_id} value={a.admin_id}>{a.name}</option>)}
+              </select>
+              <button style={{ ...s.primaryBtn, padding: "0.45rem 0.9rem", fontSize: "0.85rem" }} onClick={downloadSystemRoomsReport}>
+                Download PDF
+              </button>
+            </div>
           </div>
         </div>
 

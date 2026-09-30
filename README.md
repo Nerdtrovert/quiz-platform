@@ -117,3 +117,34 @@ Database
 
 Use database/schema.sql to create schema on production MySQL.
 ```
+
+## One-off live event checklist
+
+This application supports a single live room of 55–60 players on a
+single backend instance. The live room is designed to recover from a brief
+process restart, but it is not zero-downtime or multi-instance infrastructure.
+Set `ROOM_MAX_PARTICIPANTS` on Render to a value from `55` through `60` (the
+default is `60`); invalid values fall back to `60`.
+
+1. **Use MySQL-compatible storage.** The backend uses `mysql2`, MySQL-specific
+   SQL, and `database/schema.sql`. A PostgreSQL service (including Aiven
+   PostgreSQL free) cannot be connected by changing only `DATABASE_URL`.
+2. **Before the event**, run `npm run check` from `backend` against the
+   production database, then verify `GET /health` from the deployed URL.
+3. **Warm the Render service** by opening `/health` and the frontend shortly
+   before participants join. Keep the host dashboard and the deployed health
+   endpoint open during the event.
+4. **Rehearse with 55–60 clients**: join the same room, start the quiz, submit
+   answers, disconnect several clients, reconnect them, and confirm the final
+   leaderboard and response counts in the database.
+5. **Export or snapshot the database** before creating the event room. Do not
+   rely on Render's local filesystem for event data.
+6. **If the service restarts**, wait for `/health` to return `200`, reload the
+   host page, and have participants reload the room page. The room and answer
+   records are restored from MySQL; an answer submitted during the outage may
+   need to be submitted again.
+
+Free Render services may sleep, restart, or exhaust monthly usage, and free
+database services have no production availability guarantee. Check provider
+usage and service logs immediately before the event; do not schedule the event
+if the database is near its storage or connection limit.

@@ -3,6 +3,9 @@ import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import useViewport from "../../hooks/useViewport";
 import { SOCKET_URL } from "../../utils/runtime";
+import { getItemWithExpiry, setItemWithExpiry, removeItem, clearQuizStorage, getStorageUsage } from "../../utils/storage";
+import { getAnswerBatcher, destroyAnswerBatcher } from "../../utils/batching";
+import api from "../../utils/api";
 import { DoodleAtom, DoodleMonitor, DoodleGlobe, DoodleBook, DoodleController, DoodlePalette } from "../../components/ThemeDoodles";
 import RichQuestionText from "../../components/RichQuestionText";
 
@@ -50,6 +53,17 @@ export default function QuizRoom() {
       } else {
         socket.emit("join-room", { room_code: roomCode, name: playerName });
       }
+      // Process any pending answer batches from previous connection
+      const quizId = sessionStorage.getItem("quiz_id");
+      const participantId = sessionStorage.getItem("participant_id");
+      if (quizId && participantId && socketRef.current) {
+        const batcher = getAnswerBatcher(
+          quizId,
+          Number(participantId),
+          socketRef.current
+        );
+        batcher.processPendingRetries();
+      }
     });
 
     socket.on("joined-room", ({ participant_id, quiz_id, name }) => {
@@ -57,6 +71,9 @@ export default function QuizRoom() {
       sessionStorage.setItem("participant_id", participant_id);
       if (quiz_id != null) {
         sessionStorage.setItem("quiz_id", String(quiz_id));
+
+        // Fetch and cache questions for this quiz
+        fetchAndCacheQuestions(quiz_id);
       }
       sessionStorage.setItem("player_name", name || playerName);
       sessionStorage.setItem("room_code", roomCode);
@@ -94,7 +111,14 @@ export default function QuizRoom() {
     socket.on("quiz-end", ({ leaderboard }) => {
       const lb = leaderboard || [];
       const savedName = sessionStorage.getItem("player_name") || playerName;
+      const quizId = sessionStorage.getItem("quiz_id"); // Get quiz_id before clearing
       sessionStorage.clear();
+
+      // Clear cached questions for this quiz
+      if (quizId) {
+        removeItem(`quiz_${quizId}`);
+      }
+
       setFinalLeaderboard(lb);
       setCurrentQuestion(null);
       const myEntry = lb.find((e) => e.name === savedName);
@@ -127,6 +151,8 @@ export default function QuizRoom() {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       socket.disconnect();
+      // Clean up answer batcher on unmount
+      destroyAnswerBatcher();
     };
   }, [roomCode, playerName]);
 
@@ -158,16 +184,87 @@ export default function QuizRoom() {
     };
   }, [status, currentQuestion, paused]);
 
+  // Question caching - store questions in localStorage when received
+  useEffect(() => {
+    if (currentQuestion) {
+      // We don't have direct access to all questions here, but we could store
+      // them when we first receive them in the question-start handler
+      // Actually, we need to modify the question-start handler to cache all questions
+    }
+  }, [currentQuestion]);
+
+  // Fetch and cache questions for a quiz
+  const fetchAndCacheQuestions = async (quizId) => {
+    try {
+      // Check if we already have cached questions for this quiz
+      const cachedQuestions = getItemWithExpiry(`quiz_${quizId}`, 3600); // Cache for 1 hour
+      if (cachedQuestions) {
+        // Questions already cached, no need to fetch
+        return;
+      }
+
+      // Fetch questions from API
+      const response = await api.get(`/quizzes/${quizId}`);
+      if (response.data && response.data.quiz && response.data.questions) {
+        // Cache the questions with a 1-hour TTL
+        setItemWithExpiry(`quiz_${quizId}`, {
+          questions: response.data.questions,
+          quizId: response.data.quiz.quiz_id,
+          title: response.data.quiz.title
+        }, 3600); // Cache for 1 hour
+      }
+    } catch (error) {
+      console.warn("Failed to fetch and cache questions:", error);
+      // Fall back to socket-based question loading
+    }
+  };
+
+  useEffect(() => {
+    // Question caching - check if we have cached questions for current quiz
+    const quizId = sessionStorage.getItem("quiz_id");
+    if (quizId) {
+      const cached = getItemWithExpiry(`quiz_${quizId}`, 3600);
+      if (cached && cached.questions) {
+        // We have cached questions, we could use them if needed
+        // For now, we'll still rely on socket for question delivery
+        // but we have them cached for potential future use
+      }
+    }
+  }, []);
+
   const submitAnswer = () => {
     if (!currentQuestion || selectedOption == null || submitted) return;
     const totalTime = currentQuestion.time_per_question || 0;
     const response_time_ms = Math.max(totalTime - timeLeft, 0) * 1000;
-    socketRef.current?.emit("submit-answer", {
-      room_code: roomCode,
-      question_id: currentQuestion.question_id,
-      selected_option: selectedOption,
-      response_time_ms,
-    });
+
+    // Get quiz and participant IDs for batching
+    const quizId = sessionStorage.getItem("quiz_id");
+    const participantId = sessionStorage.getItem("participant_id");
+
+    if (quizId && participantId && socketRef.current) {
+      // Get or create answer batcher for this session
+      const batcher = getAnswerBatcher(
+        quizId,
+        Number(participantId),
+        socketRef.current
+      );
+
+      // Add answer to batch instead of sending immediately
+      batcher.addAnswer({
+        question_id: currentQuestion.question_id,
+        selected_option: selectedOption,
+        response_time_ms
+      });
+    } else {
+      // Fallback to original behavior if batching setup fails
+      socketRef.current?.emit("submit-answer", {
+        room_code: roomCode,
+        question_id: currentQuestion.question_id,
+        selected_option: selectedOption,
+        response_time_ms,
+      });
+    }
+
     setSubmitted(true);
   };
 

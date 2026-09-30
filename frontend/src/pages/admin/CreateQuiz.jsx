@@ -4,14 +4,29 @@ import api from "../../utils/api";
 
 const GENRES = ["Science", "History", "Tech", "Mixed", "Math", "General"];
 const DIFFICULTIES = ["easy", "medium", "hard"];
+const QUIZ_DIFFICULTIES = ["none", ...DIFFICULTIES];
 const TIME_OPTIONS = [10, 20, 30, 60];
+const POINTS = { easy: 500, medium: 750, hard: 1000 };
+
+const emptyCustomQuestion = {
+  question_text: "",
+  genre: "Science",
+  difficulty: "medium",
+  base_points: 750,
+  options: [
+    { option_text: "", is_correct: false },
+    { option_text: "", is_correct: false },
+    { option_text: "", is_correct: false },
+    { option_text: "", is_correct: false },
+  ],
+};
 
 export default function CreateQuiz() {
   const navigate = useNavigate();
 
   const [title, setTitle] = useState("");
   const [genre, setGenre] = useState("Mixed");
-  const [difficulty, setDifficulty] = useState("medium");
+  const [difficulty, setDifficulty] = useState("none");
   const [timePerQuestion, setTimePerQuestion] = useState(30);
 
   const [allQuestions, setAllQuestions] = useState([]);
@@ -20,6 +35,8 @@ export default function CreateQuiz() {
   const [filterDiff, setFilterDiff] = useState("");
   const [search, setSearch] = useState("");
   const [loadingQ, setLoadingQ] = useState(true);
+  const [customQuestion, setCustomQuestion] = useState(emptyCustomQuestion);
+  const [addingCustomQuestion, setAddingCustomQuestion] = useState(false);
 
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -56,6 +73,51 @@ export default function CreateQuiz() {
   const selectedQuestions = allQuestions.filter((q) =>
     selectedIds.includes(q.question_id),
   );
+
+  const handleCustomOptionChange = (index, value) => {
+    const options = [...customQuestion.options];
+    options[index] = { ...options[index], option_text: value };
+    setCustomQuestion({ ...customQuestion, options });
+  };
+
+  const handleCustomDifficultyChange = (value) => {
+    setCustomQuestion({
+      ...customQuestion,
+      difficulty: value,
+      base_points: POINTS[value],
+    });
+  };
+
+  const handleCustomQuestion = async () => {
+    if (!customQuestion.question_text.trim())
+      return setError("Custom question text is required");
+    if (customQuestion.options.some((option) => !option.option_text.trim()))
+      return setError("All 4 custom question options must be filled");
+    if (!customQuestion.options.some((option) => option.is_correct))
+      return setError("Select one correct answer for the custom question");
+
+    setAddingCustomQuestion(true);
+    setError("");
+    try {
+      const res = await api.post("/questions", customQuestion);
+      const question = {
+        question_id: res.data.question_id,
+        question_text: customQuestion.question_text,
+        genre: customQuestion.genre,
+        difficulty: customQuestion.difficulty,
+        base_points: customQuestion.base_points,
+      };
+      setAllQuestions((prev) => [question, ...prev]);
+      setSelectedIds((prev) => [...prev, question.question_id]);
+      setCustomQuestion(emptyCustomQuestion);
+    } catch (err) {
+      setError(
+        err.response?.data?.message || "Failed to add custom question",
+      );
+    } finally {
+      setAddingCustomQuestion(false);
+    }
+  };
 
   const handleSubmit = async () => {
     if (!title.trim()) return setError("Quiz title is required");
@@ -184,7 +246,7 @@ export default function CreateQuiz() {
               <div style={s.fieldBlock}>
                 <label style={s.label}>DIFFICULTY</label>
                 <div style={s.diffRow}>
-                  {DIFFICULTIES.map((d) => (
+                  {QUIZ_DIFFICULTIES.map((d) => (
                     <button
                       key={d}
                       style={{
@@ -193,7 +255,7 @@ export default function CreateQuiz() {
                       }}
                       onClick={() => setDifficulty(d)}
                     >
-                      {d}
+                      {d === "none" ? "no difficulty" : d}
                     </button>
                   ))}
                 </div>
@@ -248,6 +310,109 @@ export default function CreateQuiz() {
 
           {/* Right — question picker */}
           <div style={s.pickerCol}>
+            <div style={s.card}>
+              <h3 style={s.cardTitle}>Write a Custom Question</h3>
+              <p style={s.cardHint}>
+                Add a new question directly to this quiz and your question
+                bank.
+              </p>
+              <textarea
+                style={s.textarea}
+                placeholder="Type your question here..."
+                value={customQuestion.question_text}
+                onChange={(e) =>
+                  setCustomQuestion({
+                    ...customQuestion,
+                    question_text: e.target.value,
+                  })
+                }
+                rows={3}
+              />
+              <div style={s.customSettingsRow}>
+                <select
+                  style={s.select}
+                  value={customQuestion.genre}
+                  onChange={(e) =>
+                    setCustomQuestion({
+                      ...customQuestion,
+                      genre: e.target.value,
+                    })
+                  }
+                >
+                  {GENRES.map((g) => (
+                    <option key={g} value={g}>
+                      {g}
+                    </option>
+                  ))}
+                </select>
+                <div style={s.diffRow}>
+                  {DIFFICULTIES.map((d) => (
+                    <button
+                      key={d}
+                      style={{
+                        ...s.diffBtn,
+                        ...(customQuestion.difficulty === d
+                          ? s.diffBtnActive
+                          : {}),
+                      }}
+                      onClick={() => handleCustomDifficultyChange(d)}
+                    >
+                      {d}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div style={s.optionsGrid}>
+                {customQuestion.options.map((option, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      ...s.customOptionRow,
+                      ...(option.is_correct ? s.customOptionRowCorrect : {}),
+                    }}
+                  >
+                    <button
+                      style={{
+                        ...s.correctCircle,
+                        ...(option.is_correct
+                          ? s.correctCircleActive
+                          : {}),
+                      }}
+                      onClick={() =>
+                        setCustomQuestion({
+                          ...customQuestion,
+                          options: customQuestion.options.map((item, i) => ({
+                            ...item,
+                            is_correct: i === index,
+                          })),
+                        })
+                      }
+                    >
+                      {option.is_correct ? "✓" : index + 1}
+                    </button>
+                    <input
+                      style={s.optionInput}
+                      placeholder={`Option ${index + 1}`}
+                      value={option.option_text}
+                      onChange={(e) =>
+                        handleCustomOptionChange(index, e.target.value)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+              <button
+                style={{
+                  ...s.addCustomBtn,
+                  ...(addingCustomQuestion ? { opacity: 0.6 } : {}),
+                }}
+                onClick={handleCustomQuestion}
+                disabled={addingCustomQuestion}
+              >
+                {addingCustomQuestion ? "Adding..." : "+ Add & Select Question"}
+              </button>
+            </div>
+
             <div style={s.card}>
               <h3 style={s.cardTitle}>Pick from Question Bank</h3>
 
@@ -514,6 +679,7 @@ const s = {
     gap: "1rem",
   },
   cardTitle: { fontSize: "0.88rem", fontWeight: "700", color: "#f0e8d8" },
+  cardHint: { fontSize: "0.75rem", color: "#777", lineHeight: "1.4" },
   fieldBlock: { display: "flex", flexDirection: "column", gap: "0.4rem" },
   label: {
     fontSize: "0.63rem",
@@ -531,6 +697,18 @@ const s = {
     outline: "none",
     caretColor: "#f5a623",
   },
+  textarea: {
+    background: "#141414",
+    border: "1px solid #222",
+    borderRadius: "8px",
+    padding: "0.8rem",
+    color: "#f0e8d8",
+    fontSize: "0.85rem",
+    outline: "none",
+    resize: "vertical",
+    fontFamily: "inherit",
+    caretColor: "#f5a623",
+  },
   select: {
     background: "#141414",
     border: "1px solid #222",
@@ -542,6 +720,11 @@ const s = {
     cursor: "pointer",
   },
   diffRow: { display: "flex", gap: "0.4rem" },
+  customSettingsRow: {
+    display: "grid",
+    gridTemplateColumns: "minmax(120px, 0.8fr) 1.2fr",
+    gap: "0.6rem",
+  },
   diffBtn: {
     flex: 1,
     padding: "0.5rem",
@@ -558,6 +741,60 @@ const s = {
     background: "rgba(245,166,35,0.15)",
     border: "1px solid rgba(245,166,35,0.4)",
     color: "#f5a623",
+  },
+  optionsGrid: { display: "flex", flexDirection: "column", gap: "0.6rem" },
+  customOptionRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.7rem",
+    background: "#141414",
+    border: "1px solid #222",
+    borderRadius: "8px",
+    padding: "0.6rem 0.8rem",
+  },
+  customOptionRowCorrect: {
+    border: "1px solid rgba(16,185,129,0.4)",
+    background: "rgba(16,185,129,0.05)",
+  },
+  correctCircle: {
+    width: "26px",
+    height: "26px",
+    borderRadius: "50%",
+    background: "#1a1a1a",
+    border: "2px solid #333",
+    color: "#666",
+    fontSize: "0.72rem",
+    fontWeight: "800",
+    cursor: "pointer",
+    flexShrink: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  correctCircleActive: {
+    background: "#10b981",
+    border: "2px solid #10b981",
+    color: "white",
+  },
+  optionInput: {
+    flex: 1,
+    background: "transparent",
+    border: "none",
+    color: "#f0e8d8",
+    fontSize: "0.85rem",
+    outline: "none",
+    caretColor: "#f5a623",
+  },
+  addCustomBtn: {
+    alignSelf: "flex-start",
+    background: "rgba(245,166,35,0.12)",
+    border: "1px solid rgba(245,166,35,0.35)",
+    borderRadius: "8px",
+    color: "#f5a623",
+    padding: "0.65rem 0.9rem",
+    fontSize: "0.78rem",
+    fontWeight: "700",
+    cursor: "pointer",
   },
   emptyNote: {
     fontSize: "0.78rem",

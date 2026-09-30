@@ -9,6 +9,8 @@ export default function PastRooms() {
   const [selected, setSelected] = useState(null); // room detail modal
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     fetchRooms();
@@ -81,6 +83,30 @@ export default function PastRooms() {
     };
   };
 
+  const downloadRoomsReport = async () => {
+    try {
+      const params = {};
+      if (startDate) params.start_date = startDate;
+      if (endDate) params.end_date = endDate;
+      const res = await api.get("/admin/rooms/report", {
+        params,
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "application/pdf" });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rooms-report-${Date.now()}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Download report error:", err);
+      alert("Failed to download report");
+    }
+  };
+
   return (
     <div style={s.page}>
       <div style={s.blob} />
@@ -136,8 +162,16 @@ export default function PastRooms() {
           <div>
             <h1 style={s.title}>Past Rooms</h1>
             <p style={s.subtitle}>All live quiz sessions you've hosted</p>
+            <div style={{ marginTop: "0.6rem", display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <label style={{ fontSize: "0.8rem", color: "#aaa" }}>Date range:</label>
+              <input type="date" value={startDate} onChange={(e)=>setStartDate(e.target.value)} style={{ padding: "0.35rem", borderRadius: "6px", border: "1px solid #222", background: "#0b0b0b", color: "#fff" }} />
+              <input type="date" value={endDate} onChange={(e)=>setEndDate(e.target.value)} style={{ padding: "0.35rem", borderRadius: "6px", border: "1px solid #222", background: "#0b0b0b", color: "#fff" }} />
+              <button style={{ ...s.newBtn, padding: "0.45rem 0.9rem", fontSize: "0.78rem" }} onClick={downloadRoomsReport}>
+                Download PDF
+              </button>
+            </div>
           </div>
-          <button style={s.newBtn} onClick={() => navigate("/admin/live")}>
+          <button style={s.newBtn} onClick={() => navigate("/admin/live")}> 
             + New Room
           </button>
         </div>

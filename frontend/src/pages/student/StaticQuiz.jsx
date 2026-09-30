@@ -54,11 +54,35 @@ export default function StaticQuiz() {
     return () => clearInterval(timerRef.current);
   }, [currentIndex, nameSubmitted]);
 
+  const shuffleArray = (array) => {
+    const copy = [...array];
+    for (let i = copy.length - 1; i > 0; i -= 1) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
+
   const fetchQuiz = async () => {
     try {
       const res = await api.get(`/quizzes/${quizId}`);
       setQuiz(res.data.quiz);
-      setQuestions(res.data.questions);
+      
+      const processedQuestions = (res.data.questions || []).map((q) => {
+        let rawOptions = q.options;
+        if (typeof rawOptions === "string") {
+          try {
+            rawOptions = JSON.parse(rawOptions);
+          } catch (e) {
+            rawOptions = [];
+          }
+        }
+        return {
+          ...q,
+          options: shuffleArray(rawOptions || []),
+        };
+      });
+      setQuestions(processedQuestions);
     } catch {
       navigate("/");
     } finally {
@@ -223,11 +247,7 @@ export default function StaticQuiz() {
     );
 
   const currentQ = questions[currentIndex];
-  const options = (
-    typeof currentQ.options === "string"
-      ? JSON.parse(currentQ.options)
-      : currentQ.options
-  ).sort((a, b) => a.option_number - b.option_number);
+  const options = currentQ.options || [];
   const correctOption = options.find((o) => o.is_correct)?.option_number;
   const isCorrect = selectedOption === correctOption;
 
@@ -332,7 +352,7 @@ export default function StaticQuiz() {
             gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
           }}
         >
-          {options.map((opt) => (
+          {options.map((opt, index) => (
             <button
               key={opt.option_number}
               style={getOptionStyle(opt.option_number, correctOption)}
@@ -340,7 +360,7 @@ export default function StaticQuiz() {
               disabled={revealed}
             >
               <span style={s.optionLetter}>
-                {["A", "B", "C", "D"][opt.option_number - 1]}
+                {["A", "B", "C", "D"][index]}
               </span>
               <span style={s.optionText}>{opt.option_text}</span>
               {revealed && opt.option_number === correctOption && (

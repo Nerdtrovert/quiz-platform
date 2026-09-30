@@ -19,7 +19,17 @@ export default function WaitingRoom() {
     socketRef.current = socket;
 
     socket.on("connect", () => {
-      socket.emit("join-room", { room_code: roomCode, name: playerName });
+      const participantId = sessionStorage.getItem("participant_id");
+      const storedRoomCode = sessionStorage.getItem("room_code");
+      if (participantId && storedRoomCode === roomCode) {
+        socket.emit("rejoin-room", {
+          room_code: roomCode,
+          participant_id: Number(participantId),
+          name: sessionStorage.getItem("player_name") || playerName,
+        });
+      } else {
+        socket.emit("join-room", { room_code: roomCode, name: playerName });
+      }
     });
 
     socket.on("joined-room", ({ participant_id, quiz_id }) => {
@@ -33,12 +43,20 @@ export default function WaitingRoom() {
       setStatus("waiting");
     });
 
+    socket.on("rejoined-room", () => {
+      setStatus("waiting");
+    });
+
     socket.on("participant-joined", ({ count, participants }) => {
       setParticipantCount(count);
       setParticipants(participants || []);
     });
 
     socket.on("quiz-started", () => {
+      navigate(`/quiz/live/${roomCode}`);
+    });
+
+    socket.on("question-start", () => {
       navigate(`/quiz/live/${roomCode}`);
     });
 
